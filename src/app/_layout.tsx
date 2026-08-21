@@ -2,9 +2,10 @@ import { Stack } from 'expo-router';
 
 export default function TabLayout() {
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ title: 'Home' }} />
-      <Stack.Screen name="explore" options={{ title: 'Explore' }} />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="login" />
+      <Stack.Screen name="index" options={{ headerShown: true, title: 'Home' }} />
+      <Stack.Screen name="explore" options={{ headerShown: true, title: 'Explore' }} />
     </Stack>
   );
 }

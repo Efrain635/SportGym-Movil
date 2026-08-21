@@ -7,6 +7,16 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+// SportGym Color Palette
+export const SportGymColors = {
+  primary: '#4C9A3A',      // Principal
+  success: '#82C83F',      // Éxito / Destacado
+  error: '#E53035',        // Alertas / Error
+  white: '#FFFFFF',        // Blanco
+  darkBackground: '#1C1C1C', // Fondo oscuro
+  secondaryText: '#333333',  // Texto secundario
+} as const;
+
 export const Colors = {
   light: {
     text: '#000000',
@@ -16,9 +26,9 @@ export const Colors = {
     textSecondary: '#60646C',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
+    text: '#FFFFFF',
+    background: '#1C1C1C',
+    backgroundElement: '#333333',
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
   },
