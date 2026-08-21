@@ -7,19 +7,21 @@ import {
   Pressable,
   StyleSheet,
   TextInput,
-  View
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { SportGymColors } from '@/constants/theme';
-import { auth, signInWithEmailAndPassword } from '../../FirebaseConfig';
+import { auth, createUserWithEmailAndPassword } from '../../FirebaseConfig';
 
-export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+export default function RegisterScreen() {
+  const [nombre, setNombre] = useState('');
+  const [apellido, setApellido] = useState('');
+  const [correo, setCorreo] = useState('');
+  const [celular, setCelular] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberSession, setRememberSession] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const validateEmail = (email: string) => {
@@ -27,15 +29,44 @@ export default function LoginScreen() {
     return emailRegex.test(email);
   };
 
-  const handleLogin = async () => {
+  const validatePassword = (password: string) => {
+    return password.length >= 6;
+  };
+
+  const validateCelular = (celular: string) => {
+    const celularRegex = /^[0-9]{10}$/;
+    return celularRegex.test(celular);
+  };
+
+  const handleRegister = async () => {
     // Validaciones
-    if (!email.trim()) {
+    if (!nombre.trim()) {
+      Alert.alert('Error', 'Por favor ingresa tu nombre');
+      return;
+    }
+
+    if (!apellido.trim()) {
+      Alert.alert('Error', 'Por favor ingresa tu apellido');
+      return;
+    }
+
+    if (!correo.trim()) {
       Alert.alert('Error', 'Por favor ingresa tu correo');
       return;
     }
 
-    if (!validateEmail(email)) {
+    if (!validateEmail(correo)) {
       Alert.alert('Error', 'Por favor ingresa un correo válido');
+      return;
+    }
+
+    if (!celular.trim()) {
+      Alert.alert('Error', 'Por favor ingresa tu celular');
+      return;
+    }
+
+    if (!validateCelular(celular)) {
+      Alert.alert('Error', 'El celular debe tener 10 dígitos');
       return;
     }
 
@@ -44,25 +75,36 @@ export default function LoginScreen() {
       return;
     }
 
+    if (!validatePassword(password)) {
+      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Iniciar sesión con Firebase Authentication
-      await signInWithEmailAndPassword(auth, email, password);
+      // Crear usuario en Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(auth, correo, password);
       
-      // Login exitoso - navegar a tabs
-      router.replace('/(tabs)');
+      Alert.alert(
+        '¡Cuenta creada!',
+        'Tu cuenta ha sido creada exitosamente. Ahora puedes iniciar sesión.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/login'),
+          },
+        ]
+      );
     } catch (error: any) {
-      let errorMessage = 'Error al iniciar sesión';
+      let errorMessage = 'Error al crear la cuenta';
       
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = 'Usuario no encontrado';
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Contraseña incorrecta';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Este correo ya está registrado';
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = 'El correo no es válido';
-      } else if (error.code === 'auth/user-disabled') {
-        errorMessage = 'Esta cuenta ha sido deshabilitada';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'La contraseña es muy débil';
       } else if (error.code === 'auth/network-request-failed') {
         errorMessage = 'Error de conexión. Verifica tu internet';
       }
@@ -111,22 +153,62 @@ export default function LoginScreen() {
 
               {/* SUBTÍTULO */}
               <ThemedText style={styles.subtitle}>
-                Inicia sesión para continuar
+                Crea tu cuenta nueva
               </ThemedText>
 
               {/* FORMULARIO */}
               <View style={styles.form}>
 
-                {/* EMAIL */}
+                {/* NOMBRE */}
                 <View style={styles.inputContainer}>
                   <TextInput
                     style={styles.input}
-                    placeholder="Correo o usuario"
+                    placeholder="Nombre"
                     placeholderTextColor="#777777"
-                    value={email}
-                    onChangeText={setEmail}
+                    value={nombre}
+                    onChangeText={setNombre}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {/* APELLIDO */}
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Apellido"
+                    placeholderTextColor="#777777"
+                    value={apellido}
+                    onChangeText={setApellido}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {/* CORREO */}
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Correo electrónico"
+                    placeholderTextColor="#777777"
+                    value={correo}
+                    onChangeText={setCorreo}
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {/* CELULAR */}
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Celular (10 dígitos)"
+                    placeholderTextColor="#777777"
+                    value={celular}
+                    onChangeText={setCelular}
+                    keyboardType="phone-pad"
+                    maxLength={10}
                     autoCorrect={false}
                   />
                 </View>
@@ -138,7 +220,7 @@ export default function LoginScreen() {
                       styles.input,
                       styles.passwordInput,
                     ]}
-                    placeholder="Contraseña"
+                    placeholder="Contraseña (mínimo 6 caracteres)"
                     placeholderTextColor="#777777"
                     value={password}
                     onChangeText={setPassword}
@@ -163,74 +245,32 @@ export default function LoginScreen() {
                   </Pressable>
                 </View>
 
-                {/* RECORDAR SESIÓN */}
-                <Pressable
-                  style={styles.rememberContainer}
-                  onPress={() =>
-                    setRememberSession(!rememberSession)
-                  }
-                >
-                  <View
-                    style={[
-                      styles.checkbox,
-                      rememberSession &&
-                        styles.checkboxChecked,
-                    ]}
-                  >
-                    {rememberSession && (
-                      <ThemedText style={styles.checkmark}>
-                        ✓
-                      </ThemedText>
-                    )}
-                  </View>
-
-                  <ThemedText style={styles.rememberText}>
-                    Recordar sesión
-                  </ThemedText>
-                </Pressable>
-
-                {/* RECUPERAR CONTRASEÑA */}
-                <Pressable
-                  style={styles.forgotContainer}
-                  onPress={() => {
-                    console.log('Forgot password');
-                  }}
-                >
-                  <ThemedText style={styles.forgotPassword}>
-                    ¿Olvidaste tu contraseña?
-                  </ThemedText>
-                </Pressable>
-
-                {/* BOTÓN LOGIN */}
+                {/* BOTÓN REGISTRAR */}
                 <Pressable
                   style={({ pressed }) => [
-                    styles.loginButton,
+                    styles.registerButton,
                     pressed && styles.buttonPressed,
                     loading && styles.buttonDisabled,
                   ]}
-                  onPress={handleLogin}
+                  onPress={handleRegister}
                   disabled={loading}
                 >
-                  <ThemedText style={styles.loginButtonText}>
-                    {loading ? 'INICIANDO SESIÓN...' : 'INICIAR SESIÓN'}
+                  <ThemedText style={styles.registerButtonText}>
+                    {loading ? 'CREANDO CUENTA...' : 'CREAR CUENTA'}
                   </ThemedText>
                 </Pressable>
 
                 {/* FOOTER */}
                 <View style={styles.footer}>
                   <ThemedText style={styles.footerText}>
-                    ¿No tienes cuenta?
+                    ¿Ya tienes cuenta?
                   </ThemedText>
 
                   <Pressable
-                    style={({ pressed }) => [
-                      styles.registerButtonLink,
-                      pressed && styles.buttonPressed,
-                    ]}
-                    onPress={() => router.replace('/register')}
+                    onPress={() => router.replace('/login')}
                   >
-                    <ThemedText style={styles.registerLink}>
-                      Crear cuenta
+                    <ThemedText style={styles.loginLink}>
+                      Inicia sesión
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -501,80 +541,10 @@ const styles = StyleSheet.create({
   },
 
   // =====================================================
-  // RECORDAR SESIÓN
-  // =====================================================
-
-  rememberContainer: {
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    marginTop: 2,
-    marginBottom: 13,
-  },
-
-  checkbox: {
-    width: 24,
-    height: 24,
-
-    borderRadius: 5,
-
-    borderWidth: 1.5,
-    borderColor: '#555555',
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    marginRight: 13,
-  },
-
-  checkboxChecked: {
-    backgroundColor: SportGymColors.primary,
-    borderColor: SportGymColors.primary,
-  },
-
-  checkmark: {
-    color: '#FFFFFF',
-
-    fontSize: 18,
-    fontWeight: '900',
-
-    lineHeight: 20,
-  },
-
-  rememberText: {
-    color: '#C8C8C8',
-
-    fontSize: 14,
-
-    fontWeight: '500',
-  },
-
-  // =====================================================
-  // FORGOT PASSWORD
-  // =====================================================
-
-  forgotContainer: {
-    alignItems: 'center',
-
-    marginBottom: 28,
-  },
-
-  forgotPassword: {
-    color: SportGymColors.primary,
-
-    fontSize: 14,
-
-    fontWeight: '700',
-
-    fontStyle: 'italic',
-  },
-
-  // =====================================================
   // BOTÓN
   // =====================================================
 
-  loginButton: {
+  registerButton: {
     width: '100%',
     height: 58,
 
@@ -588,7 +558,7 @@ const styles = StyleSheet.create({
     marginBottom: 27,
   },
 
-  loginButtonText: {
+  registerButtonText: {
     color: '#FFFFFF',
 
     fontSize: 15,
@@ -633,15 +603,7 @@ const styles = StyleSheet.create({
     marginBottom: 11,
   },
 
-  registerButtonLink: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: SportGymColors.primary,
-  },
-
-  registerLink: {
+  loginLink: {
     color: SportGymColors.primary,
 
     fontSize: 15,
