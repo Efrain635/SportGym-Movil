@@ -1,13 +1,13 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    StyleSheet,
+    TextInput,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -47,27 +47,13 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // Iniciar sesión con Firebase Authentication
+      // Mock login for UI development
       await signInWithEmailAndPassword(auth, email, password);
       
       // Login exitoso - navegar a tabs
       router.replace('/(tabs)');
     } catch (error: any) {
-      let errorMessage = 'Error al iniciar sesión';
-      
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = 'Usuario no encontrado';
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Contraseña incorrecta';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'El correo no es válido';
-      } else if (error.code === 'auth/user-disabled') {
-        errorMessage = 'Esta cuenta ha sido deshabilitada';
-      } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Error de conexión. Verifica tu internet';
-      }
-      
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error', 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }

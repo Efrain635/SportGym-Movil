@@ -1,13 +1,13 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    StyleSheet,
+    TextInput,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -83,8 +83,8 @@ export default function RegisterScreen() {
     setLoading(true);
 
     try {
-      // Crear usuario en Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(auth, correo, password);
+      // Mock registration for UI development
+      await createUserWithEmailAndPassword(auth, correo, password);
       
       Alert.alert(
         '¡Cuenta creada!',
@@ -97,19 +97,7 @@ export default function RegisterScreen() {
         ]
       );
     } catch (error: any) {
-      let errorMessage = 'Error al crear la cuenta';
-      
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'Este correo ya está registrado';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'El correo no es válido';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'La contraseña es muy débil';
-      } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Error de conexión. Verifica tu internet';
-      }
-      
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error', 'Error al crear la cuenta');
     } finally {
       setLoading(false);
     }

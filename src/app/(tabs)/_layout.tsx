@@ -9,12 +9,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: SportGymColors.primary,
         tabBarInactiveTintColor: '#888888',
         tabBarStyle: {
-          backgroundColor: '#0B0C0C',
-          borderTopColor: '#4A4A4A',
-          borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
+          display: 'none',
         },
         tabBarLabelStyle: {
           fontSize: 12,

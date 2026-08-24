@@ -1,31 +1,17 @@
-// Firebase Web SDK configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyCEPyRBv__htO6aLh_Z_W68WoQTm-b4ILg",
-  authDomain: "sportgym-support.firebaseapp.com",
-  projectId: "sportgym-support",
-  storageBucket: "sportgym-support.firebasestorage.app",
-  messagingSenderId: "499251791435",
-  appId: "1:499251791435:web:3ff316c48582d86a0a2fce"
-};
-
-// Mock functions for now - we'll implement proper Firebase integration
-export const app = { config: firebaseConfig };
-export const authInstance = {
+// Mock simple implementation for UI development
+const mockAuth = {
   currentUser: null,
   onAuthStateChanged: (callback: any) => {
-    // Mock implementation
     callback(null);
     return () => {};
   },
   signInWithEmailAndPassword: async (email: string, password: string) => {
-    // Mock implementation - will be replaced with real Firebase
-    console.log('Mock login:', email, password);
-    return { user: { email, uid: 'mock-uid' } };
+    console.log('Mock login:', email);
+    return { user: { email, uid: 'mock-' + Date.now() } };
   },
   createUserWithEmailAndPassword: async (email: string, password: string) => {
-    // Mock implementation - will be replaced with real Firebase
-    console.log('Mock register:', email, password);
-    return { user: { email, uid: 'mock-uid' } };
+    console.log('Mock register:', email);
+    return { user: { email, uid: 'mock-' + Date.now() } };
   },
   signOut: async () => {
     console.log('Mock logout');
@@ -33,8 +19,8 @@ export const authInstance = {
   }
 };
 
-export const onAuthStateChanged = (callback: any) => authInstance.onAuthStateChanged(callback);
-export const signInWithEmailAndPassword = (email: string, password: string) => authInstance.signInWithEmailAndPassword(email, password);
-export const createUserWithEmailAndPassword = (email: string, password: string) => authInstance.createUserWithEmailAndPassword(email, password);
-export const signOut = () => authInstance.signOut();
-
+export const auth = mockAuth;
+export const onAuthStateChanged = (callback: any) => mockAuth.onAuthStateChanged(callback);
+export const signInWithEmailAndPassword = (email: string, password: string) => mockAuth.signInWithEmailAndPassword(email, password);
+export const createUserWithEmailAndPassword = (email: string, password: string) => mockAuth.createUserWithEmailAndPassword(email, password);
+export const signOut = () => mockAuth.signOut();
