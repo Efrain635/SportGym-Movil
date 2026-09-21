@@ -1,7 +1,7 @@
 // Mock simple implementation for UI development
 const mockAuth = {
   currentUser: null,
-  onAuthStateChanged: (callback: any) => {
+  onAuthStateChanged: (callback: (user: { email: string; uid: string } | null) => void) => {
     callback(null);
     return () => {};
   },
@@ -20,7 +20,7 @@ const mockAuth = {
 };
 
 export const auth = mockAuth;
-export const onAuthStateChanged = (callback: any) => mockAuth.onAuthStateChanged(callback);
+export const onAuthStateChanged = (callback: (user: { email: string; uid: string } | null) => void) => mockAuth.onAuthStateChanged(callback);
 export const signInWithEmailAndPassword = (email: string, password: string) => mockAuth.signInWithEmailAndPassword(email, password);
 export const createUserWithEmailAndPassword = (email: string, password: string) => mockAuth.createUserWithEmailAndPassword(email, password);
 export const signOut = () => mockAuth.signOut();

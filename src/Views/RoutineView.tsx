@@ -184,7 +184,7 @@ export default function RoutineView() {
               activeIcon="home"
               active={false}
               onPress={() => {
-                router.push('/(tabs)');
+                router.push('/(tabs)/index' as any);
               }}
             />
 

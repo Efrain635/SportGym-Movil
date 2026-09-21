@@ -1,36 +1,68 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
-import { auth, onAuthStateChanged } from '../../FirebaseConfig';
-import { WelcomeScreen } from '../components/welcome-screen';
+import { useEffect, useRef } from "react";
+import {
+    Animated,
+    Dimensions,
+    Image,
+    StyleSheet,
+    View
+} from "react-native";
+
+const { width, height } = Dimensions.get("window");
 
 export default function IndexScreen() {
-  const [showWelcome, setShowWelcome] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    // Animación de salida después de 3 segundos
+    const fadeOutAnimation = Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 800,
+      useNativeDriver: true,
     });
 
-    return () => unsubscribe();
+    const timer = setTimeout(() => {
+      fadeOutAnimation.start(() => {
+        router.replace('/login');
+      });
+    }, 3000);
+
+    return () => {
+      clearTimeout(timer);
+      fadeOutAnimation.stop();
+    };
   }, []);
 
-  const handleWelcomeComplete = () => {
-    setShowWelcome(false);
-    // Redirigir inmediatamente después de la animación de bienvenida
-    if (user) {
-      // Usuario autenticado, redirigir a tabs
-      router.replace('/(tabs)');
-    } else {
-      // Usuario no autenticado, redirigir a login
-      router.replace('/login');
-    }
-  };
-
-  if (showWelcome) {
-    return <WelcomeScreen onComplete={handleWelcomeComplete} />;
-  }
-
-  return <View style={{ flex: 1, backgroundColor: '#090A0A' }} />;
+  return (
+    <Animated.View 
+      style={[
+        styles.container,
+        { opacity: fadeAnim }
+      ]}
+    >
+      <View style={styles.imageContainer}>
+        <Image
+          source={require('@/Imagen/Imagen-d-bienvenida-nv.jpg')}
+          style={styles.backgroundImage}
+          resizeMode="cover"
+        />
+      </View>
+    </Animated.View>
+  );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  imageContainer: {
+    flex: 1,
+    width: width,
+    height: height,
+  },
+  backgroundImage: {
+    width: width,
+    height: height,
+  },
+});

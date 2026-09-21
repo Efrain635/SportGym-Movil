@@ -96,7 +96,7 @@ export default function RegisterScreen() {
           },
         ]
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       Alert.alert('Error', 'Error al crear la cuenta');
     } finally {
       setLoading(false);

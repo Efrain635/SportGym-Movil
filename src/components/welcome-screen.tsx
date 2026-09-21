@@ -21,8 +21,11 @@ export function WelcomeScreen({ onComplete }: { onComplete: () => void }) {
   const ghostY = useSharedValue(0);
 
   useEffect(() => {
+    console.log('WelcomeScreen mounted');
+    
     // Mostrar animación fantasma después de 1.5 segundos
     const ghostTimer = setTimeout(() => {
+      console.log('Showing ghost animation');
       setShowGhost(true);
       
       // Animación de aparición del fantasma
@@ -51,10 +54,12 @@ export function WelcomeScreen({ onComplete }: { onComplete: () => void }) {
 
     // Completar y navegar después de 4 segundos
     const completeTimer = setTimeout(() => {
+      console.log('Calling onComplete - navigating to login');
       onComplete();
     }, 4000);
 
     return () => {
+      console.log('WelcomeScreen unmounting');
       clearTimeout(ghostTimer);
       clearTimeout(completeTimer);
     };
@@ -125,7 +130,7 @@ const styles = StyleSheet.create({
   },
   welcomeText: {
     fontSize: 24,
-    color: '#4CAF50',
+    color: '#4C9A3A',
     fontWeight: 'bold',
     marginBottom: 10,
     letterSpacing: 2,
@@ -136,7 +141,7 @@ const styles = StyleSheet.create({
   },
   sportGymText: {
     fontSize: 48,
-    color: '#4CAF50',
+    color: '#4C9A3A',
     fontWeight: '900',
     letterSpacing: 3,
     textShadowColor: '#2E7D32',
@@ -145,7 +150,7 @@ const styles = StyleSheet.create({
   },
   appText: {
     fontSize: 24,
-    color: '#4CAF50',
+    color: '#4C9A3A',
     fontWeight: 'bold',
     marginTop: 10,
     letterSpacing: 2,
@@ -160,10 +165,10 @@ const styles = StyleSheet.create({
   ghostBody: {
     width: 120,
     height: 140,
-    backgroundColor: 'rgba(76, 175, 80, 0.3)',
+    backgroundColor: 'rgba(76, 154, 58, 0.3)',
     borderRadius: 60,
     borderWidth: 2,
-    borderColor: 'rgba(76, 175, 80, 0.5)',
+    borderColor: 'rgba(76, 154, 58, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -190,7 +195,7 @@ const styles = StyleSheet.create({
   ghostWave: {
     width: 20,
     height: 20,
-    backgroundColor: 'rgba(76, 175, 80, 0.3)',
+    backgroundColor: 'rgba(76, 154, 58, 0.3)',
     borderRadius: 10,
     position: 'absolute',
   },
@@ -199,17 +204,17 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: 'rgba(76, 154, 58, 0.1)',
     borderWidth: 2,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
+    borderColor: 'rgba(76, 154, 58, 0.3)',
   },
   ghostGlow2: {
     position: 'absolute',
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: 'rgba(76, 175, 80, 0.05)',
+    backgroundColor: 'rgba(76, 154, 58, 0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(76, 175, 80, 0.2)',
+    borderColor: 'rgba(76, 154, 58, 0.2)',
   },
 });

@@ -143,7 +143,7 @@ export default function ProfileView() {
               activeIcon="home"
               active={false}
               onPress={() => {
-                router.push('/(tabs)');
+                router.push('/(tabs)/index' as any);
               }}
             />
 

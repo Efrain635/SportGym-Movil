@@ -50,9 +50,9 @@ export default function LoginScreen() {
       // Mock login for UI development
       await signInWithEmailAndPassword(auth, email, password);
       
-      // Login exitoso - navegar a tabs
-      router.replace('/(tabs)');
-    } catch (error: any) {
+      // Login exitoso - navegar a primera pantalla de onboarding
+      router.replace('/onboarding/Pantalla1');
+    } catch (error: unknown) {
       Alert.alert('Error', 'Error al iniciar sesión');
     } finally {
       setLoading(false);
@@ -175,17 +175,6 @@ export default function LoginScreen() {
                   </ThemedText>
                 </Pressable>
 
-                {/* RECUPERAR CONTRASEÑA */}
-                <Pressable
-                  style={styles.forgotContainer}
-                  onPress={() => {
-                    console.log('Forgot password');
-                  }}
-                >
-                  <ThemedText style={styles.forgotPassword}>
-                    ¿Olvidaste tu contraseña?
-                  </ThemedText>
-                </Pressable>
 
                 {/* BOTÓN LOGIN */}
                 <Pressable
@@ -202,24 +191,6 @@ export default function LoginScreen() {
                   </ThemedText>
                 </Pressable>
 
-                {/* FOOTER */}
-                <View style={styles.footer}>
-                  <ThemedText style={styles.footerText}>
-                    ¿No tienes cuenta?
-                  </ThemedText>
-
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.registerButtonLink,
-                      pressed && styles.buttonPressed,
-                    ]}
-                    onPress={() => router.replace('/register')}
-                  >
-                    <ThemedText style={styles.registerLink}>
-                      Crear cuenta
-                    </ThemedText>
-                  </Pressable>
-                </View>
               </View>
             </View>
           </View>

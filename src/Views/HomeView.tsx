@@ -22,7 +22,7 @@ export default function HomeView() {
 
     switch (tab) {
       case 'Inicio':
-        router.push('/(tabs)');
+        router.push('/(tabs)/index' as any);
         break;
       case 'Rutina':
         router.push('/(tabs)/routine');

@@ -2,10 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    View,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -208,7 +208,7 @@ export default function PaymentsView() {
               activeIcon="home"
               active={false}
               onPress={() => {
-                router.push('/(tabs)');
+                router.push('/(tabs)/index' as any);
               }}
             />
 
