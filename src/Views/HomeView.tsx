@@ -346,6 +346,18 @@ export default function HomeView() {
 
           </View>
 
+          <Pressable
+            style={({ pressed }) => [
+              styles.chatbotButton,
+              pressed && styles.chatbotButtonPressed,
+            ]}
+            onPress={() => router.push('/chatbot')}
+            accessibilityRole="button"
+            accessibilityLabel="Abrir chat con Sporti"
+          >
+            <Ionicons name="chatbubbles" size={28} color="#FFFFFF" />
+          </Pressable>
+
         </View>
 
       </SafeAreaView>
@@ -905,6 +917,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
 
     paddingHorizontal: 5,
+  },
+
+  chatbotButton: {
+    position: 'absolute',
+    right: 18,
+    bottom: 88,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D92D55',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+
+  chatbotButtonPressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.96 }],
   },
 
   scannerScreen: {
