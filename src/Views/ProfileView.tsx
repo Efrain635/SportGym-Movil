@@ -5,8 +5,37 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, signOut } from '../../FirebaseConfig';
+import { useAttendance } from '../lib/attendance';
+
+const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const heatmapWeeks = 16;
+
+const startOfWeek = (date: Date) => {
+  const result = new Date(date);
+  const sundayBasedDay = result.getDay();
+  const daysSinceMonday = (sundayBasedDay + 6) % 7;
+  result.setDate(result.getDate() - daysSinceMonday);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const createHeatmapWeeks = () => {
+  const currentWeek = startOfWeek(new Date());
+  const firstDay = new Date(currentWeek);
+  firstDay.setDate(firstDay.getDate() - (heatmapWeeks - 1) * 7);
+
+  return Array.from({ length: heatmapWeeks }, (_, weekIndex) =>
+    Array.from({ length: 7 }, (_, weekdayIndex) => {
+      const date = new Date(firstDay.getTime());
+      date.setDate(firstDay.getDate() + weekIndex * 7 + weekdayIndex);
+      return date;
+    }),
+  );
+};
 
 export default function ProfileView() {
+  const { hasAttendance, total: totalAttendances } = useAttendance();
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -118,6 +147,11 @@ export default function ProfileView() {
               </View>
             </View>
 
+            <AttendanceCalendar
+              hasAttendance={hasAttendance}
+              totalAttendances={totalAttendances}
+            />
+
             <Pressable
               style={styles.logoutButton}
               onPress={handleLogout}
@@ -177,20 +211,78 @@ export default function ProfileView() {
               }}
             />
 
-            <BottomTab
-              label="Perfil"
-              icon="person-outline"
-              activeIcon="person"
-              active={true}
-              onPress={() => {
-                router.push('/(tabs)/profile');
-              }}
-            />
-
           </View>
 
         </View>
       </SafeAreaView>
+    </View>
+  );
+}
+
+type AttendanceCalendarProps = {
+  hasAttendance: (date: Date) => boolean;
+  totalAttendances: number;
+};
+
+function AttendanceCalendar({
+  hasAttendance,
+  totalAttendances,
+}: AttendanceCalendarProps) {
+  const weeks = createHeatmapWeeks();
+
+  return (
+    <View style={styles.attendanceCard}>
+      <View style={styles.attendanceHeader}>
+        <View>
+          <ThemedText style={styles.attendanceTitle}>
+            Calendario de asistencias
+          </ThemedText>
+          <ThemedText style={styles.attendanceSubtitle}>
+            {totalAttendances} {totalAttendances === 1 ? 'día registrado' : 'días registrados'}
+          </ThemedText>
+        </View>
+        <Ionicons name="calendar-outline" size={22} color={SportGymColors.primary} />
+      </View>
+
+      <View style={styles.heatmap}>
+        <View style={styles.weekdayLabels}>
+          {weekdayLabels.map((label) => (
+            <ThemedText key={label} style={styles.weekdayLabel}>
+              {label}
+            </ThemedText>
+          ))}
+        </View>
+
+        <View style={styles.weekColumns}>
+          {weeks.map((week, weekIndex) => (
+            <View key={`week-${weekIndex}`} style={styles.weekColumn}>
+              {week.map((date) => {
+                const registered = hasAttendance(date);
+
+                return (
+                  <View
+                    key={date.toISOString()}
+                    style={[
+                      styles.dayCell,
+                      registered ? styles.dayCellRegistered : styles.dayCellEmpty,
+                    ]}
+                    accessibilityLabel={`${date.toLocaleDateString('es-MX')}: ${
+                      registered ? 'asistencia registrada' : 'sin asistencia'
+                    }`}
+                  />
+                );
+              })}
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.calendarLegend}>
+        <ThemedText style={styles.legendText}>Sin asistencia</ThemedText>
+        <View style={[styles.legendCell, styles.dayCellEmpty]} />
+        <ThemedText style={styles.legendText}>Registrada</ThemedText>
+        <View style={[styles.legendCell, styles.dayCellRegistered]} />
+      </View>
     </View>
   );
 }
@@ -463,6 +555,99 @@ const styles = StyleSheet.create({
 
   activeValue: {
     color: '#59B83C',
+  },
+
+  attendanceCard: {
+    backgroundColor: '#1B1C1C',
+    borderRadius: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 17,
+    marginBottom: 13,
+    borderWidth: 1,
+    borderColor: '#202121',
+  },
+
+  attendanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 17,
+  },
+
+  attendanceTitle: {
+    color: '#F2F2F2',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+
+  attendanceSubtitle: {
+    color: '#AFAFAF',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+
+  heatmap: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+
+  weekdayLabels: {
+    width: 17,
+    gap: 5,
+    marginRight: 7,
+  },
+
+  weekdayLabel: {
+    height: 13,
+    color: '#858585',
+    fontSize: 9,
+    lineHeight: 13,
+    textAlign: 'center',
+  },
+
+  weekColumns: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+
+  weekColumn: {
+    gap: 5,
+  },
+
+  dayCell: {
+    width: 13,
+    height: 13,
+    borderRadius: 3,
+  },
+
+  dayCellEmpty: {
+    backgroundColor: '#4A4D4B',
+  },
+
+  dayCellRegistered: {
+    backgroundColor: '#59B83C',
+  },
+
+  calendarLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    marginTop: 15,
+  },
+
+  legendCell: {
+    width: 11,
+    height: 11,
+    borderRadius: 3,
+  },
+
+  legendText: {
+    color: '#858585',
+    fontSize: 10,
+    fontWeight: '500',
   },
 
   // ===================================================

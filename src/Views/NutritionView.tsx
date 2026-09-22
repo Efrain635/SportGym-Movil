@@ -16,7 +16,13 @@ export default function NutritionView() {
               <Ionicons name="arrow-back" size={25} color="#D8D8D8" />
             </Pressable>
             <ThemedText style={styles.headerTitle}>Nutrición</ThemedText>
-            <View style={styles.headerRightSpace} />
+            <Pressable
+              style={styles.profileButton}
+              onPress={() => router.push('/(tabs)/profile')}
+              accessibilityLabel="Abrir perfil"
+            >
+              <Ionicons name="person" size={18} color="#FFFFFF" />
+            </Pressable>
           </View>
 
           <ScrollView contentContainerStyle={styles.content}>
@@ -62,12 +68,6 @@ export default function NutritionView() {
               active
               onPress={() => router.push('/(tabs)/nutrition')}
             />
-            <BottomTab
-              label="Perfil"
-              icon="person-outline"
-              activeIcon="person"
-              onPress={() => router.push('/(tabs)/profile')}
-            />
           </View>
         </View>
       </SafeAreaView>
@@ -100,6 +100,16 @@ const styles = StyleSheet.create({
   backButton: { width: 40 },
   headerTitle: { color: '#F2F2F2', fontSize: 20, fontWeight: '800' },
   headerRightSpace: { width: 40 },
+  profileButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1B1C1C',
+    borderWidth: 1,
+    borderColor: '#3A3B3B',
+  },
   content: { padding: 18 },
   heroCard: {
     alignItems: 'center',

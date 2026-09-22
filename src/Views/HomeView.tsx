@@ -15,8 +15,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '../components/themed-text';
 import { SportGymColors } from '../constants/theme';
+import { registerAttendance } from '../lib/attendance';
 
-type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición' | 'Perfil';
+type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';
 
 const membershipStartDate = new Date(2026, 7, 25);
 const membershipEndDate = new Date(2026, 8, 25);
@@ -80,13 +81,11 @@ export default function HomeView() {
       case 'Nutrición':
         router.push('/(tabs)/nutrition');
         break;
-      case 'Perfil':
-        router.push('/(tabs)/profile');
-        break;
     }
   };
 
   const handleScan = ({ data }: { data: string }) => {
+    registerAttendance();
     setIsScannerVisible(false);
     Alert.alert('Asistencia registrada', 'Tu entrada al gimnasio fue registrada correctamente.');
   };
@@ -112,13 +111,21 @@ export default function HomeView() {
             {/* ================================================= */}
 
             <View style={styles.header}>
-              <ThemedText style={styles.greeting}>
-                ¡Hola, Juan! <ThemedText style={styles.wave}>👋</ThemedText>
-              </ThemedText>
-
-              <ThemedText style={styles.greetingSubtitle}>
-                Listo para entrenar hoy?
-              </ThemedText>
+              <View>
+                <ThemedText style={styles.greeting}>
+                  ¡Hola, Juan! <ThemedText style={styles.wave}>👋</ThemedText>
+                </ThemedText>
+                <ThemedText style={styles.greetingSubtitle}>
+                  Listo para entrenar hoy?
+                </ThemedText>
+              </View>
+              <Pressable
+                style={styles.profileButton}
+                onPress={() => router.push('/(tabs)/profile')}
+                accessibilityLabel="Abrir perfil"
+              >
+                <Ionicons name="person" size={18} color="#FFFFFF" />
+              </Pressable>
             </View>
 
             {/* ================================================= */}
@@ -337,14 +344,6 @@ export default function HomeView() {
               onPress={() => handleTabPress('Nutrición')}
             />
 
-            <BottomTab
-              label="Perfil"
-              icon="person-outline"
-              activeIcon="person"
-              active={activeTab === 'Perfil'}
-              onPress={() => handleTabPress('Perfil')}
-            />
-
           </View>
 
         </View>
@@ -506,7 +505,21 @@ const styles = StyleSheet.create({
   // =======================================================
 
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     marginBottom: 22,
+  },
+
+  profileButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1B1C1C',
+    borderWidth: 1,
+    borderColor: '#3A3B3B',
   },
 
   greeting: {

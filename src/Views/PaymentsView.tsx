@@ -242,16 +242,6 @@ export default function PaymentsView() {
               }}
             />
 
-            <BottomTab
-              label="Perfil"
-              icon="person-outline"
-              activeIcon="person"
-              active={false}
-              onPress={() => {
-                router.push('/(tabs)/profile');
-              }}
-            />
-
           </View>
 
         </View>

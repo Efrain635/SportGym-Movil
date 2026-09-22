@@ -106,8 +106,13 @@ export default function RoutineView() {
               Mi Rutina
             </ThemedText>
 
-            {/* Espacio para centrar el título */}
-            <View style={styles.headerRightSpace} />
+            <Pressable
+              style={styles.profileButton}
+              onPress={() => router.push('/(tabs)/profile')}
+              accessibilityLabel="Abrir perfil"
+            >
+              <Ionicons name="person" size={18} color="#FFFFFF" />
+            </Pressable>
           </View>
 
           {/* ========================================= */}
@@ -215,16 +220,6 @@ export default function RoutineView() {
               active={false}
               onPress={() => {
                 router.push('/(tabs)/nutrition');
-              }}
-            />
-
-            <BottomTab
-              label="Perfil"
-              icon="person-outline"
-              activeIcon="person"
-              active={false}
-              onPress={() => {
-                router.push('/(tabs)/profile');
               }}
             />
 
@@ -487,6 +482,17 @@ const styles = StyleSheet.create({
 
   headerRightSpace: {
     width: 40,
+  },
+
+  profileButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1B1C1C',
+    borderWidth: 1,
+    borderColor: '#3A3B3B',
   },
 
   // ===================================================
