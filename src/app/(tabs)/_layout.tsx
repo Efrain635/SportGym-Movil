@@ -40,9 +40,24 @@ export default function TabLayout() {
         name="payments"
         options={{
           title: 'Mis pagos',
+          href: null,
           tabBarIcon: ({ color }) => (
             <Icon name="payment" color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="store"
+        options={{
+          title: 'Tienda',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="nutrition"
+        options={{
+          title: 'Nutrición',
+          href: null,
         }}
       />
       <Tabs.Screen

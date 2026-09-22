@@ -16,25 +16,69 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '../components/themed-text';
 import { SportGymColors } from '../constants/theme';
 
-type TabName = 'Inicio' | 'Rutina' | 'Pagos' | 'Perfil';
+type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición' | 'Perfil';
+
+const membershipStartDate = new Date(2026, 7, 25);
+const membershipEndDate = new Date(2026, 8, 25);
+
+const formatMembershipDate = (date: Date) =>
+  date.toLocaleDateString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
+const getMembershipDaysRemaining = () => {
+  const today = new Date();
+  const todayAtMidnight = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const millisecondsPerDay = 1000 * 60 * 60 * 24;
+
+  return Math.max(
+    0,
+    Math.ceil(
+      (membershipEndDate.getTime() - todayAtMidnight.getTime()) /
+        millisecondsPerDay,
+    ),
+  );
+};
+
+const isMembershipExpired = () => {
+  const today = new Date();
+  const todayAtMidnight = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+
+  return todayAtMidnight.getTime() >= membershipEndDate.getTime();
+};
 
 export default function HomeView() {
   const [activeTab, setActiveTab] = useState<TabName>('Inicio');
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const membershipDaysRemaining = getMembershipDaysRemaining();
+  const membershipExpired = isMembershipExpired();
 
   const handleTabPress = (tab: TabName) => {
     setActiveTab(tab);
 
     switch (tab) {
       case 'Inicio':
-        router.push('/(tabs)/index' as any);
+        router.navigate('/(tabs)/index' as any);
         break;
       case 'Rutina':
         router.push('/(tabs)/routine');
         break;
-      case 'Pagos':
-        router.push('/(tabs)/payments');
+      case 'Tienda':
+        router.push('/(tabs)/store');
+        break;
+      case 'Nutrición':
+        router.push('/(tabs)/nutrition');
         break;
       case 'Perfil':
         router.push('/(tabs)/profile');
@@ -109,37 +153,47 @@ export default function HomeView() {
             {/* MEMBRESÍA */}
             {/* ================================================= */}
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.membershipCard,
-                pressed && styles.pressed,
-              ]}
-            >
+            <View style={styles.membershipCard}>
               <View style={styles.membershipTopRow}>
                 <ThemedText style={styles.membershipLabel}>
                   Membresía
                 </ThemedText>
-
-                <Ionicons
-                  name="chevron-forward"
-                  size={25}
-                  color={SportGymColors.primary}
-                />
               </View>
 
               <View style={styles.membershipMainRow}>
-                <ThemedText style={styles.premiumText}>
-                  PREMIUM
+                <ThemedText style={styles.membershipTypeText}>
+                  Mensual
                 </ThemedText>
 
-                <ThemedText style={styles.activeText}>
-                  Activa
+                <ThemedText
+                  style={[
+                    styles.activeText,
+                    membershipExpired && styles.expiredText,
+                  ]}
+                >
+                  {membershipExpired ? 'Vencida' : 'Activa'}
                 </ThemedText>
               </View>
 
-              <ThemedText style={styles.expirationText}>
-                Vence: 25 Sep 2026
-              </ThemedText>
+              <View style={styles.membershipDatesRow}>
+                <View style={styles.membershipDateRow}>
+                  <ThemedText style={styles.membershipDateLabel}>
+                    Inicio
+                  </ThemedText>
+                  <ThemedText style={styles.membershipDateText}>
+                    {formatMembershipDate(membershipStartDate)}
+                  </ThemedText>
+                </View>
+
+                <View style={styles.membershipDateRow}>
+                  <ThemedText style={styles.membershipDateLabel}>
+                    Vencimiento
+                  </ThemedText>
+                  <ThemedText style={styles.membershipDateText}>
+                    {formatMembershipDate(membershipEndDate)}
+                  </ThemedText>
+                </View>
+              </View>
 
               <View style={styles.remainingRow}>
                 <View style={styles.remainingIcon}>
@@ -151,10 +205,10 @@ export default function HomeView() {
                 </View>
 
                 <ThemedText style={styles.remainingText}>
-                  16 días restantes
+                  {membershipDaysRemaining} días restantes
                 </ThemedText>
               </View>
-            </Pressable>
+            </View>
 
             {/* ================================================= */}
             {/* PRÓXIMO ENTRENAMIENTO */}
@@ -268,11 +322,19 @@ export default function HomeView() {
             />
 
             <BottomTab
-              label="Pagos"
-              icon="card-outline"
-              activeIcon="card"
-              active={activeTab === 'Pagos'}
-              onPress={() => handleTabPress('Pagos')}
+              label="Tienda"
+              icon="flask-outline"
+              activeIcon="flask"
+              active={activeTab === 'Tienda'}
+              onPress={() => handleTabPress('Tienda')}
+            />
+
+            <BottomTab
+              label="Nutrición"
+              icon="nutrition-outline"
+              activeIcon="nutrition"
+              active={activeTab === 'Nutrición'}
+              onPress={() => handleTabPress('Nutrición')}
             />
 
             <BottomTab
@@ -542,8 +604,6 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    justifyContent: 'space-between',
-
     marginBottom: 10,
   },
 
@@ -565,7 +625,7 @@ const styles = StyleSheet.create({
     marginBottom: 17,
   },
 
-  premiumText: {
+  membershipTypeText: {
     color: '#101010',
 
     fontSize: 26,
@@ -587,14 +647,31 @@ const styles = StyleSheet.create({
     marginRight: 1,
   },
 
-  expirationText: {
-    color: '#5C5C5C',
-
-    fontSize: 14,
-
-    fontWeight: '500',
-
+  membershipDatesRow: {
     marginBottom: 15,
+  },
+
+  membershipDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+
+  membershipDateLabel: {
+    color: '#777777',
+    fontSize: 12,
+    fontWeight: '500',
+    width: 90,
+  },
+
+  membershipDateText: {
+    color: '#5C5C5C',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  expiredText: {
+    color: '#C74747',
   },
 
   remainingRow: {

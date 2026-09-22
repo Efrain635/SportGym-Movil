@@ -208,7 +208,7 @@ export default function PaymentsView() {
               activeIcon="home"
               active={false}
               onPress={() => {
-                router.push('/(tabs)/index' as any);
+                router.navigate('/(tabs)/index' as any);
               }}
             />
 
@@ -223,12 +223,22 @@ export default function PaymentsView() {
             />
 
             <BottomTab
-              label="Pagos"
-              icon="card-outline"
-              activeIcon="card"
-              active={true}
+              label="Tienda"
+              icon="flask-outline"
+              activeIcon="flask"
+              active={false}
               onPress={() => {
-                router.push('/(tabs)/payments');
+                router.push('/(tabs)/store');
+              }}
+            />
+
+            <BottomTab
+              label="Nutrición"
+              icon="nutrition-outline"
+              activeIcon="nutrition"
+              active={false}
+              onPress={() => {
+                router.push('/(tabs)/nutrition');
               }}
             />
 
