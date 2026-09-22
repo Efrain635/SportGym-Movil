@@ -34,6 +34,15 @@
         }
       ],
       "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permite que SportGym use tu cámara para escanear códigos QR",
+          "microphonePermission": "Permite que SportGym use tu micrófono",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
       "expo-image",
       "expo-status-bar",
       "expo-web-browser"

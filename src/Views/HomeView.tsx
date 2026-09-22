@@ -1,10 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
+    Alert,
+    Modal,
     Pressable,
     ScrollView,
     StyleSheet,
+    Text,
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +20,8 @@ type TabName = 'Inicio' | 'Rutina' | 'Pagos' | 'Perfil';
 
 export default function HomeView() {
   const [activeTab, setActiveTab] = useState<TabName>('Inicio');
+  const [isScannerVisible, setIsScannerVisible] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
 
   const handleTabPress = (tab: TabName) => {
     setActiveTab(tab);
@@ -34,6 +40,11 @@ export default function HomeView() {
         router.push('/(tabs)/profile');
         break;
     }
+  };
+
+  const handleScan = ({ data }: { data: string }) => {
+    setIsScannerVisible(false);
+    Alert.alert('Asistencia registrada', 'Tu entrada al gimnasio fue registrada correctamente.');
   };
 
   return (
@@ -64,6 +75,34 @@ export default function HomeView() {
               <ThemedText style={styles.greetingSubtitle}>
                 Listo para entrenar hoy?
               </ThemedText>
+            </View>
+
+            {/* ================================================= */}
+            {/* ASISTENCIA */}
+            {/* ================================================= */}
+
+            <View style={styles.attendanceCard}>
+              <View style={styles.attendanceCopy}>
+                <ThemedText style={styles.attendanceTitle}>
+                  REGISTRA TU ASISTENCIA
+                </ThemedText>
+                <ThemedText style={styles.attendanceDescription}>
+                  Escanea el código QR en el gimnasio para registrar tu entrada
+                </ThemedText>
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.scanButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                onPress={() => setIsScannerVisible(true)}
+              >
+                <Ionicons name="qr-code-outline" size={19} color="#FFFFFF" />
+                <ThemedText style={styles.scanButtonText}>
+                  ESCANEAR QR
+                </ThemedText>
+              </Pressable>
             </View>
 
             {/* ================================================= */}
@@ -249,6 +288,54 @@ export default function HomeView() {
         </View>
 
       </SafeAreaView>
+
+      <Modal
+        visible={isScannerVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setIsScannerVisible(false)}
+      >
+        <View style={styles.scannerScreen}>
+          {permission?.granted ? (
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={handleScan}
+            />
+          ) : (
+            <View style={styles.permissionContent}>
+              <Ionicons name="camera-outline" size={48} color="#FFFFFF" />
+              <Text style={styles.permissionTitle}>Permiso de cámara</Text>
+              <Text style={styles.permissionText}>
+                Necesitamos acceso a tu cámara para escanear el código QR.
+              </Text>
+              <Pressable
+                style={styles.permissionButton}
+                onPress={requestPermission}
+              >
+                <Text style={styles.permissionButtonText}>PERMITIR CÁMARA</Text>
+              </Pressable>
+            </View>
+          )}
+
+          <Pressable
+            style={styles.closeScannerButton}
+            onPress={() => setIsScannerVisible(false)}
+            accessibilityLabel="Cerrar escáner"
+          >
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </Pressable>
+
+          {permission?.granted && (
+            <View style={styles.scannerHint}>
+              <Text style={styles.scannerHintText}>
+                Apunta al código QR de asistencia
+              </Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -383,6 +470,54 @@ const styles = StyleSheet.create({
     fontWeight: '500',
 
     marginTop: 4,
+  },
+
+  // =======================================================
+  // ASISTENCIA
+  // =======================================================
+
+  attendanceCard: {
+    marginBottom: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    borderRadius: 15,
+    backgroundColor: '#1B1C1C',
+    borderWidth: 1,
+    borderColor: '#292A2A',
+  },
+
+  attendanceCopy: {
+    marginBottom: 13,
+  },
+
+  attendanceTitle: {
+    color: '#F2F2F2',
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 5,
+  },
+
+  attendanceDescription: {
+    color: '#BDBDBD',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+
+  scanButton: {
+    height: 43,
+    borderRadius: 9,
+    backgroundColor: '#4C9A3A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  scanButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
 
   // =======================================================
@@ -680,6 +815,80 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
 
     paddingHorizontal: 5,
+  },
+
+  scannerScreen: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+
+  camera: {
+    flex: 1,
+  },
+
+  permissionContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+
+  permissionTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '800',
+    marginTop: 18,
+    marginBottom: 8,
+  },
+
+  permissionText: {
+    color: '#C4C4C4',
+    fontSize: 15,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+
+  permissionButton: {
+    backgroundColor: '#4C9A3A',
+    borderRadius: 9,
+    paddingHorizontal: 20,
+    paddingVertical: 13,
+  },
+
+  permissionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  closeScannerButton: {
+    position: 'absolute',
+    top: 55,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+
+  scannerHint: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    bottom: 48,
+    paddingVertical: 13,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  },
+
+  scannerHintText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '600',
   },
 
   bottomTab: {
