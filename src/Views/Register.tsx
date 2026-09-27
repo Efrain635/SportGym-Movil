@@ -1,26 +1,28 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router } from "expo-router";
+import { useState } from "react";
 import {
     Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
+    ScrollView,
     StyleSheet,
     TextInput,
     View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ThemedText } from '@/components/themed-text';
-import { SportGymColors } from '@/constants/theme';
-import { auth, createUserWithEmailAndPassword } from '../../FirebaseConfig';
+import { ThemedText } from "@/components/themed-text";
+import { SportGymColors } from "@/constants/theme";
+import { registerWithUsername } from "../../assets/database/firebase";
 
 export default function RegisterScreen() {
-  const [nombre, setNombre] = useState('');
-  const [apellido, setApellido] = useState('');
-  const [correo, setCorreo] = useState('');
-  const [celular, setCelular] = useState('');
-  const [password, setPassword] = useState('');
+  const [nombre, setNombre] = useState("");
+  const [apellido, setApellido] = useState("");
+  const [username, setUsername] = useState("");
+  const [correo, setCorreo] = useState("");
+  const [celular, setCelular] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -41,63 +43,83 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     // Validaciones
     if (!nombre.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu nombre');
+      Alert.alert("Error", "Por favor ingresa tu nombre");
       return;
     }
 
     if (!apellido.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu apellido');
+      Alert.alert("Error", "Por favor ingresa tu apellido");
+      return;
+    }
+
+    if (!/^[a-z0-9._-]{3,20}$/.test(username)) {
+      Alert.alert(
+        "Error",
+        "El usuario debe tener de 3 a 20 caracteres: letras, números, puntos, guiones o guiones bajos",
+      );
       return;
     }
 
     if (!correo.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu correo');
+      Alert.alert("Error", "Por favor ingresa tu correo");
       return;
     }
 
     if (!validateEmail(correo)) {
-      Alert.alert('Error', 'Por favor ingresa un correo válido');
+      Alert.alert("Error", "Por favor ingresa un correo válido");
       return;
     }
 
     if (!celular.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu celular');
+      Alert.alert("Error", "Por favor ingresa tu celular");
       return;
     }
 
     if (!validateCelular(celular)) {
-      Alert.alert('Error', 'El celular debe tener 10 dígitos');
+      Alert.alert("Error", "El celular debe tener 10 dígitos");
       return;
     }
 
     if (!password) {
-      Alert.alert('Error', 'Por favor ingresa tu contraseña');
+      Alert.alert("Error", "Por favor ingresa tu contraseña");
       return;
     }
 
     if (!validatePassword(password)) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      Alert.alert("Error", "La contraseña debe tener al menos 6 caracteres");
       return;
     }
 
     setLoading(true);
 
     try {
-      // Mock registration for UI development
-      await createUserWithEmailAndPassword(auth, correo, password);
-      
+      await registerWithUsername({
+        username,
+        email: correo,
+        password,
+        firstName: nombre,
+        lastName: apellido,
+        phone: celular,
+      });
+
       Alert.alert(
-        '¡Cuenta creada!',
-        'Tu cuenta ha sido creada exitosamente. Ahora puedes iniciar sesión.',
+        "¡Cuenta creada!",
+        "Tu cuenta ha sido creada exitosamente. Ahora puedes iniciar sesión.",
         [
           {
-            text: 'OK',
-            onPress: () => router.replace('/login'),
+            text: "OK",
+            onPress: () => router.replace("/login"),
           },
-        ]
+        ],
       );
     } catch (error: unknown) {
-      Alert.alert('Error', 'Error al crear la cuenta');
+      const errorMessage = (error as { message?: string }).message;
+      Alert.alert(
+        "Error",
+        errorMessage === "username-already-in-use"
+          ? "Ese nombre de usuario ya está en uso"
+          : "No se pudo crear la cuenta. Revisa tus datos e inténtalo de nuevo",
+      );
     } finally {
       setLoading(false);
     }
@@ -107,22 +129,22 @@ export default function RegisterScreen() {
     <View style={styles.screen}>
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.keyboardContainer}
         >
           {/* CONTENEDOR PRINCIPAL */}
           <View style={styles.card}>
-            <View style={styles.content}>
-
+            <ScrollView
+              style={styles.contentScroll}
+              contentContainerStyle={styles.content}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               {/* LOGO */}
               <View style={styles.logoContainer}>
-                <ThemedText style={styles.logoSport}>
-                  SPORT
-                </ThemedText>
+                <ThemedText style={styles.logoSport}>SPORT</ThemedText>
 
-                <ThemedText style={styles.logoGym}>
-                  GYM
-                </ThemedText>
+                <ThemedText style={styles.logoGym}>GYM</ThemedText>
               </View>
 
               {/* BARRA */}
@@ -146,7 +168,6 @@ export default function RegisterScreen() {
 
               {/* FORMULARIO */}
               <View style={styles.form}>
-
                 {/* NOMBRE */}
                 <View style={styles.inputContainer}>
                   <TextInput
@@ -170,6 +191,22 @@ export default function RegisterScreen() {
                     onChangeText={setApellido}
                     autoCapitalize="words"
                     autoCorrect={false}
+                  />
+                </View>
+
+                {/* USUARIO */}
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Nombre de usuario"
+                    placeholderTextColor="#777777"
+                    value={username}
+                    onChangeText={(value) =>
+                      setUsername(value.replace(/\s/g, "").toLowerCase())
+                    }
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    maxLength={20}
                   />
                 </View>
 
@@ -204,10 +241,7 @@ export default function RegisterScreen() {
                 {/* PASSWORD */}
                 <View style={styles.inputContainer}>
                   <TextInput
-                    style={[
-                      styles.input,
-                      styles.passwordInput,
-                    ]}
+                    style={[styles.input, styles.passwordInput]}
                     placeholder="Contraseña (mínimo 6 caracteres)"
                     placeholderTextColor="#777777"
                     value={password}
@@ -219,16 +253,12 @@ export default function RegisterScreen() {
 
                   <Pressable
                     style={styles.eyeButton}
-                    onPress={() =>
-                      setShowPassword(!showPassword)
-                    }
+                    onPress={() => setShowPassword(!showPassword)}
                   >
                     <View style={styles.eyeIcon}>
                       <View style={styles.eyeShape} />
 
-                      {!showPassword && (
-                        <View style={styles.eyeSlash} />
-                      )}
+                      {!showPassword && <View style={styles.eyeSlash} />}
                     </View>
                   </Pressable>
                 </View>
@@ -244,7 +274,7 @@ export default function RegisterScreen() {
                   disabled={loading}
                 >
                   <ThemedText style={styles.registerButtonText}>
-                    {loading ? 'CREANDO CUENTA...' : 'CREAR CUENTA'}
+                    {loading ? "CREANDO CUENTA..." : "CREAR CUENTA"}
                   </ThemedText>
                 </Pressable>
 
@@ -254,16 +284,14 @@ export default function RegisterScreen() {
                     ¿Ya tienes cuenta?
                   </ThemedText>
 
-                  <Pressable
-                    onPress={() => router.replace('/login')}
-                  >
+                  <Pressable onPress={() => router.replace("/login")}>
                     <ThemedText style={styles.loginLink}>
                       Inicia sesión
                     </ThemedText>
                   </Pressable>
                 </View>
               </View>
-            </View>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -278,7 +306,7 @@ const styles = StyleSheet.create({
 
   screen: {
     flex: 1,
-    backgroundColor: '#090A0A',
+    backgroundColor: "#090A0A",
   },
 
   safeArea: {
@@ -286,6 +314,10 @@ const styles = StyleSheet.create({
   },
 
   keyboardContainer: {
+    flex: 1,
+  },
+
+  contentScroll: {
     flex: 1,
   },
 
@@ -300,22 +332,22 @@ const styles = StyleSheet.create({
     marginTop: 7,
 
     borderWidth: 2,
-    borderColor: '#4A4A4A',
+    borderColor: "#4A4A4A",
     borderRadius: 24,
 
-    backgroundColor: '#0B0C0C',
+    backgroundColor: "#0B0C0C",
 
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 
   content: {
-    flex: 1,
+    flexGrow: 1,
 
     paddingHorizontal: 23,
     paddingTop: 25,
     paddingBottom: 28,
 
-    alignItems: 'stretch',
+    alignItems: "stretch",
   },
 
   // =====================================================
@@ -323,21 +355,21 @@ const styles = StyleSheet.create({
   // =====================================================
 
   logoContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
 
     marginTop: 20,
     marginBottom: 14,
   },
 
   logoSport: {
-    color: '#F4F4F4',
+    color: "#F4F4F4",
 
     fontSize: 72,
     lineHeight: 73,
 
-    fontWeight: '900',
-    fontStyle: 'italic',
+    fontWeight: "900",
+    fontStyle: "italic",
 
     letterSpacing: -1.5,
   },
@@ -348,8 +380,8 @@ const styles = StyleSheet.create({
     fontSize: 72,
     lineHeight: 72,
 
-    fontWeight: '900',
-    fontStyle: 'italic',
+    fontWeight: "900",
+    fontStyle: "italic",
 
     letterSpacing: -1.5,
 
@@ -363,9 +395,9 @@ const styles = StyleSheet.create({
   barbellContainer: {
     height: 42,
 
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
 
     marginBottom: 18,
   },
@@ -374,7 +406,7 @@ const styles = StyleSheet.create({
     width: 132,
     height: 6,
 
-    backgroundColor: '#D8D8D8',
+    backgroundColor: "#D8D8D8",
 
     borderRadius: 3,
   },
@@ -383,7 +415,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 34,
 
-    backgroundColor: '#D8D8D8',
+    backgroundColor: "#D8D8D8",
 
     borderRadius: 2,
 
@@ -394,7 +426,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 24,
 
-    backgroundColor: '#D8D8D8',
+    backgroundColor: "#D8D8D8",
 
     borderRadius: 2,
 
@@ -405,7 +437,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 24,
 
-    backgroundColor: '#D8D8D8',
+    backgroundColor: "#D8D8D8",
 
     borderRadius: 2,
 
@@ -416,7 +448,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 34,
 
-    backgroundColor: '#D8D8D8',
+    backgroundColor: "#D8D8D8",
 
     borderRadius: 2,
 
@@ -428,12 +460,12 @@ const styles = StyleSheet.create({
   // =====================================================
 
   subtitle: {
-    color: '#C7C7C7',
+    color: "#C7C7C7",
 
     fontSize: 16,
-    fontWeight: '400',
+    fontWeight: "400",
 
-    textAlign: 'center',
+    textAlign: "center",
 
     marginBottom: 24,
   },
@@ -443,35 +475,35 @@ const styles = StyleSheet.create({
   // =====================================================
 
   form: {
-    width: '100%',
+    width: "100%",
   },
 
   inputContainer: {
-    position: 'relative',
+    position: "relative",
 
-    width: '100%',
+    width: "100%",
     height: 57,
 
     marginBottom: 15,
 
     borderRadius: 10,
 
-    backgroundColor: '#202121',
+    backgroundColor: "#202121",
 
     borderWidth: 1,
-    borderColor: '#242525',
+    borderColor: "#242525",
   },
 
   input: {
     flex: 1,
 
-    color: '#EEEEEE',
+    color: "#EEEEEE",
 
     fontSize: 15,
 
     paddingHorizontal: 16,
 
-    fontWeight: '400',
+    fontWeight: "400",
   },
 
   passwordInput: {
@@ -483,7 +515,7 @@ const styles = StyleSheet.create({
   // =====================================================
 
   eyeButton: {
-    position: 'absolute',
+    position: "absolute",
 
     right: 12,
     top: 0,
@@ -491,16 +523,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 56,
 
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   eyeIcon: {
     width: 22,
     height: 16,
 
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   eyeShape: {
@@ -508,22 +540,22 @@ const styles = StyleSheet.create({
     height: 12,
 
     borderWidth: 1.5,
-    borderColor: '#BDBDBD',
+    borderColor: "#BDBDBD",
 
     borderRadius: 12,
   },
 
   eyeSlash: {
-    position: 'absolute',
+    position: "absolute",
 
     width: 24,
     height: 1.5,
 
-    backgroundColor: '#BDBDBD',
+    backgroundColor: "#BDBDBD",
 
     transform: [
       {
-        rotate: '45deg',
+        rotate: "45deg",
       },
     ],
   },
@@ -533,25 +565,25 @@ const styles = StyleSheet.create({
   // =====================================================
 
   registerButton: {
-    width: '100%',
+    width: "100%",
     height: 58,
 
     borderRadius: 11,
 
     backgroundColor: SportGymColors.primary,
 
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
 
     marginBottom: 27,
   },
 
   registerButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
 
     fontSize: 15,
 
-    fontWeight: '800',
+    fontWeight: "800",
 
     letterSpacing: 0.3,
   },
@@ -575,18 +607,18 @@ const styles = StyleSheet.create({
   // =====================================================
 
   footer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
 
     marginTop: 5,
   },
 
   footerText: {
-    color: '#D0D0D0',
+    color: "#D0D0D0",
 
     fontSize: 14,
 
-    fontWeight: '500',
+    fontWeight: "500",
 
     marginBottom: 11,
   },
@@ -596,8 +628,8 @@ const styles = StyleSheet.create({
 
     fontSize: 15,
 
-    fontWeight: '800',
+    fontWeight: "800",
 
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
 });
