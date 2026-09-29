@@ -8,6 +8,8 @@ import { SportGymColors } from '../constants/theme';
 
 type Filter = 'Todos' | 'Hoy' | 'Semana';
 
+type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';
+
 type Routine = {
   id: number;
   day: string;
@@ -63,6 +65,26 @@ const routines: Routine[] = [
 export default function RoutineView() {
   const [activeFilter, setActiveFilter] =
     useState<Filter>('Todos');
+  const [activeTab, setActiveTab] = useState<TabName>('Rutina');
+
+  const handleTabPress = (tab: TabName) => {
+    setActiveTab(tab);
+
+    switch (tab) {
+      case 'Inicio':
+        router.push('/(tabs)');
+        break;
+      case 'Rutina':
+        router.push('/(tabs)/routine');
+        break;
+      case 'Tienda':
+        router.push('/(tabs)/store');
+        break;
+      case 'Nutrición':
+        router.push('/(tabs)/nutrition');
+        break;
+    }
+  };
 
   const filteredRoutines = routines.filter((routine) => {
     if (activeFilter === 'Todos') {
@@ -187,40 +209,32 @@ export default function RoutineView() {
               label="Inicio"
               icon="home-outline"
               activeIcon="home"
-              active={false}
-              onPress={() => {
-                router.navigate('/(tabs)/index' as any);
-              }}
+              active={activeTab === 'Inicio'}
+              onPress={() => handleTabPress('Inicio')}
             />
 
             <BottomTab
               label="Rutina"
               icon="barbell-outline"
               activeIcon="barbell"
-              active={true}
-              onPress={() => {
-                router.push('/(tabs)/routine');
-              }}
+              active={activeTab === 'Rutina'}
+              onPress={() => handleTabPress('Rutina')}
             />
 
             <BottomTab
               label="Tienda"
               icon="flask-outline"
               activeIcon="flask"
-              active={false}
-              onPress={() => {
-                router.push('/(tabs)/store');
-              }}
+              active={activeTab === 'Tienda'}
+              onPress={() => handleTabPress('Tienda')}
             />
 
             <BottomTab
               label="Nutrición"
               icon="nutrition-outline"
               activeIcon="nutrition"
-              active={false}
-              onPress={() => {
-                router.push('/(tabs)/nutrition');
-              }}
+              active={activeTab === 'Nutrición'}
+              onPress={() => handleTabPress('Nutrición')}
             />
 
           </View>

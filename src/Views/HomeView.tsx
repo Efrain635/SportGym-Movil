@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '../components/themed-text';
 import { SportGymColors } from '../constants/theme';
+import { useAuth } from '../contexts/AuthContext';
 import { registerAttendance } from '../lib/attendance';
 
 type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';
@@ -62,6 +63,7 @@ export default function HomeView() {
   const [activeTab, setActiveTab] = useState<TabName>('Inicio');
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const { user } = useAuth();
   const membershipDaysRemaining = getMembershipDaysRemaining();
   const membershipExpired = isMembershipExpired();
 
@@ -70,7 +72,7 @@ export default function HomeView() {
 
     switch (tab) {
       case 'Inicio':
-        router.navigate('/(tabs)/index' as any);
+        router.push('/(tabs)');
         break;
       case 'Rutina':
         router.push('/(tabs)/routine');
@@ -113,7 +115,7 @@ export default function HomeView() {
             <View style={styles.header}>
               <View>
                 <ThemedText style={styles.greeting}>
-                  ¡Hola, Juan! <ThemedText style={styles.wave}>👋</ThemedText>
+                  ¡Hola, {user?.firstName || 'Usuario'}! <ThemedText style={styles.wave}>👋</ThemedText>
                 </ThemedText>
                 <ThemedText style={styles.greetingSubtitle}>
                   Listo para entrenar hoy?

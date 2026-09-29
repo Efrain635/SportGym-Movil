@@ -1,12 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '../components/themed-text';
 import { SportGymColors } from '../constants/theme';
 
+type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';
+
 export default function StoreView() {
+  const [activeTab, setActiveTab] = useState<TabName>('Tienda');
+
+  const handleTabPress = (tab: TabName) => {
+    setActiveTab(tab);
+
+    switch (tab) {
+      case 'Inicio':
+        router.push('/(tabs)');
+        break;
+      case 'Rutina':
+        router.push('/(tabs)/routine');
+        break;
+      case 'Tienda':
+        router.push('/(tabs)/store');
+        break;
+      case 'Nutrición':
+        router.push('/(tabs)/nutrition');
+        break;
+    }
+  };
   return (
     <View style={styles.screen}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -48,26 +71,29 @@ export default function StoreView() {
               label="Inicio"
               icon="home-outline"
               activeIcon="home"
-              onPress={() => router.navigate('/(tabs)/index' as any)}
+              active={activeTab === 'Inicio'}
+              onPress={() => handleTabPress('Inicio')}
             />
             <BottomTab
               label="Rutina"
               icon="barbell-outline"
               activeIcon="barbell"
-              onPress={() => router.push('/(tabs)/routine')}
+              active={activeTab === 'Rutina'}
+              onPress={() => handleTabPress('Rutina')}
             />
             <BottomTab
               label="Tienda"
               icon="flask-outline"
               activeIcon="flask"
-              active
-              onPress={() => router.push('/(tabs)/store')}
+              active={activeTab === 'Tienda'}
+              onPress={() => handleTabPress('Tienda')}
             />
             <BottomTab
               label="Nutrición"
               icon="nutrition-outline"
               activeIcon="nutrition"
-              onPress={() => router.push('/(tabs)/nutrition')}
+              active={activeTab === 'Nutrición'}
+              onPress={() => handleTabPress('Nutrición')}
             />
           </View>
         </View>

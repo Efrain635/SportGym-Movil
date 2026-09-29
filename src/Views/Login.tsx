@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { SportGymColors } from "@/constants/theme";
 import { verifyClientCredentials } from "../../assets/database/firebase";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function LoginScreen() {
   const [username, setUsername] = useState("");
@@ -21,6 +22,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberSession, setRememberSession] = useState(true);
   const [loading, setLoading] = useState(false);
+  const { setUser } = useAuth();
 
   const handleLogin = async () => {
     if (!username.trim()) {
@@ -36,7 +38,14 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      await verifyClientCredentials(username, password);
+      const userData = await verifyClientCredentials(username, password);
+
+      setUser({
+        firstName: userData.nombre || userData.firstName || '',
+        lastName: userData.apellido || userData.lastName || '',
+        username: userData.usuario || userData.username || '',
+        email: userData.email || '',
+      });
 
       router.replace("/(tabs)");
     } catch (error: unknown) {
