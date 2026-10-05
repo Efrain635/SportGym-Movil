@@ -5,6 +5,13 @@ type User = {
   lastName: string;
   username: string;
   email: string;
+  membership: MembershipInfo | null;
+};
+
+export type MembershipInfo = {
+  plan: string | null;
+  startDate: string | null;
+  endDate: string | null;
 };
 
 type AuthContextType = {

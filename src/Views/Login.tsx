@@ -13,7 +13,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
 import { SportGymColors } from "@/constants/theme";
-import { verifyClientCredentials } from "../../assets/database/firebase";
+import {
+  getClientMembership,
+  verifyClientCredentials,
+} from "../../assets/database/firebase";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function LoginScreen() {
@@ -39,12 +42,15 @@ export default function LoginScreen() {
 
     try {
       const userData = await verifyClientCredentials(username, password);
+      const clientUsername =
+        userData.usuario || userData.username || username;
 
       setUser({
         firstName: userData.nombre || userData.firstName || '',
         lastName: userData.apellido || userData.lastName || '',
-        username: userData.usuario || userData.username || '',
+        username: clientUsername,
         email: userData.email || '',
+        membership: getClientMembership(userData),
       });
 
       router.replace("/terminos");

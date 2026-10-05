@@ -20,52 +20,77 @@ import { registerAttendance } from '../lib/attendance';
 
 type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';
 
-const membershipStartDate = new Date(2026, 7, 25);
-const membershipEndDate = new Date(2026, 8, 25);
+const parseMembershipDate = (value: string | null) => {
+  if (!value) {
+    return null;
+  }
 
-const formatMembershipDate = (date: Date) =>
-  date.toLocaleDateString('es-MX', {
+  const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = dateOnly
+    ? new Date(
+        Number(dateOnly[1]),
+        Number(dateOnly[2]) - 1,
+        Number(dateOnly[3]),
+      )
+    : new Date(value);
+
+  if (
+    dateOnly &&
+    (date.getFullYear() !== Number(dateOnly[1]) ||
+      date.getMonth() !== Number(dateOnly[2]) - 1 ||
+      date.getDate() !== Number(dateOnly[3]))
+  ) {
+    return null;
+  }
+
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatMembershipDate = (date: Date | null) =>
+  date?.toLocaleDateString('es-MX', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
-  });
+  }) ?? '—';
 
-const getMembershipDaysRemaining = () => {
-  const today = new Date();
-  const todayAtMidnight = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
-  const millisecondsPerDay = 1000 * 60 * 60 * 24;
+const getCalendarDayNumber = (date: Date) =>
+  Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
 
-  return Math.max(
-    0,
-    Math.ceil(
-      (membershipEndDate.getTime() - todayAtMidnight.getTime()) /
-        millisecondsPerDay,
-    ),
-  );
-};
-
-const isMembershipExpired = () => {
-  const today = new Date();
-  const todayAtMidnight = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
-
-  return todayAtMidnight.getTime() >= membershipEndDate.getTime();
-};
+const millisecondsPerDay = 1000 * 60 * 60 * 24;
 
 export default function HomeView() {
   const [activeTab, setActiveTab] = useState<TabName>('Inicio');
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const { user } = useAuth();
-  const membershipDaysRemaining = getMembershipDaysRemaining();
-  const membershipExpired = isMembershipExpired();
+  const membership = user?.membership ?? null;
+  const membershipStartDate = parseMembershipDate(membership?.startDate ?? null);
+  const membershipEndDate = parseMembershipDate(membership?.endDate ?? null);
+  const today = new Date();
+  const daysUntilExpiration = membershipEndDate
+    ? Math.floor(
+        (getCalendarDayNumber(membershipEndDate) -
+          getCalendarDayNumber(today)) /
+          millisecondsPerDay,
+      )
+    : null;
+  const membershipExpired = daysUntilExpiration !== null && daysUntilExpiration < 0;
+  const membershipActive =
+    membershipEndDate !== null &&
+    !membershipExpired &&
+    (!membershipStartDate ||
+      getCalendarDayNumber(today) >= getCalendarDayNumber(membershipStartDate));
+  const membershipStatus = !membership
+    ? 'Sin membresía'
+    : !membershipEndDate
+      ? 'Sin vigencia'
+      : membershipExpired
+        ? 'Vencida'
+        : membershipActive
+          ? 'Activa'
+          : 'Por iniciar';
+  const membershipDaysRemaining =
+    daysUntilExpiration === null ? null : Math.max(0, daysUntilExpiration);
 
   const handleTabPress = (tab: TabName) => {
     setActiveTab(tab);
@@ -171,16 +196,19 @@ export default function HomeView() {
 
               <View style={styles.membershipMainRow}>
                 <ThemedText style={styles.membershipTypeText}>
-                  Mensual
+                  {membership?.plan || (membership ? 'Membresía' : 'Sin membresía')}
                 </ThemedText>
 
                 <ThemedText
                   style={[
                     styles.activeText,
                     membershipExpired && styles.expiredText,
+                    !membershipActive &&
+                      !membershipExpired &&
+                      styles.inactiveMembershipText,
                   ]}
                 >
-                  {membershipExpired ? 'Vencida' : 'Activa'}
+                  {membershipStatus}
                 </ThemedText>
               </View>
 
@@ -214,7 +242,9 @@ export default function HomeView() {
                 </View>
 
                 <ThemedText style={styles.remainingText}>
-                  {membershipDaysRemaining} días restantes
+                  {membershipDaysRemaining === null
+                    ? 'Sin días restantes'
+                    : `${membershipDaysRemaining} días restantes`}
                 </ThemedText>
               </View>
             </View>
@@ -672,6 +702,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
 
     marginRight: 1,
+  },
+
+  inactiveMembershipText: {
+    color: '#777777',
   },
 
   membershipDatesRow: {
