@@ -76,7 +76,9 @@ export default function HomeView() {
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const { user } = useAuth();
-  const { hasAttendance, currentStreak, weekTotal, bestStreak } = useAttendance();
+  const { hasAttendance, currentStreak, weekTotal, bestStreak } = useAttendance(
+    user?.username ?? null,
+  );
   const weekDates = getCurrentWeekDates();
   const membership = user?.membership ?? null;
   const membershipStartDate = parseMembershipDate(membership?.startDate ?? null);
@@ -127,7 +129,7 @@ export default function HomeView() {
   };
 
   const handleScan = ({ data }: { data: string }) => {
-    registerAttendance();
+    registerAttendance(user?.username ?? null);
     setIsScannerVisible(false);
     Alert.alert('Asistencia registrada', 'Tu entrada al gimnasio fue registrada correctamente.');
   };
@@ -153,12 +155,15 @@ export default function HomeView() {
             {/* ================================================= */}
 
             <View style={styles.header}>
-              <View>
+              <View style={styles.greetingContainer}>
                 <ThemedText style={styles.greeting}>
-                  ¡Hola, {user?.firstName || 'Usuario'}! <ThemedText style={styles.wave}>👋</ThemedText>
+                  ¡Hola,
+                  {'\n'}
+                  {user?.firstName || 'Usuario'}!{' '}
+                  <ThemedText style={styles.wave}>👋</ThemedText>
                 </ThemedText>
                 <ThemedText style={styles.greetingSubtitle}>
-                  Listo para entrenar hoy?
+                  ¿Listo para entrenar hoy?
                 </ThemedText>
               </View>
               <View style={styles.headerActions}>
@@ -176,9 +181,17 @@ export default function HomeView() {
                 <Pressable
                   style={styles.profileButton}
                   onPress={() => router.push('/(tabs)/profile')}
+                  accessibilityRole="button"
                   accessibilityLabel="Abrir perfil"
                 >
-                  <Ionicons name="person" size={18} color="#FFFFFF" />
+                  <Ionicons
+                    name="person"
+                    size={17}
+                    color={SportGymColors.primary}
+                  />
+                  <ThemedText style={styles.profileButtonLabel}>
+                    Perfil
+                  </ThemedText>
                 </Pressable>
               </View>
             </View>
@@ -589,15 +602,21 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 22,
+  },
+
+  greetingContainer: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
 
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
+    flexShrink: 0,
   },
 
   notificationButton: {
@@ -609,24 +628,30 @@ const styles = StyleSheet.create({
   },
 
   profileButton: {
-    width: 36,
+    minWidth: 68,
     height: 36,
+    paddingHorizontal: 9,
     borderRadius: 18,
+    flexDirection: 'row',
+    gap: 5,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1B1C1C',
     borderWidth: 1,
-    borderColor: '#3A3B3B',
+    borderColor: SportGymColors.primary,
+  },
+
+  profileButtonLabel: {
+    color: '#F2F2F2',
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   greeting: {
     color: '#F2F2F2',
-
-    fontSize: 24,
-    lineHeight: 30,
-
+    fontSize: 22,
+    lineHeight: 27,
     fontWeight: '800',
-
     letterSpacing: -0.5,
   },
 

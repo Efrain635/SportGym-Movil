@@ -49,7 +49,12 @@ export default function LoginScreen() {
         firstName: userData.nombre || userData.firstName || '',
         lastName: userData.apellido || userData.lastName || '',
         username: clientUsername,
-        email: userData.email || '',
+        email: userData.email || userData.correo || '',
+        phone:
+          userData.telefono ||
+          userData.celular ||
+          userData.phone ||
+          null,
         membership: getClientMembership(userData),
       });
 

@@ -6,12 +6,71 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, signOut } from '../../FirebaseConfig';
+import { useAuth } from '../contexts/AuthContext';
 import { useAttendance } from '../lib/attendance';
 
-type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';
+type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición' | 'Perfil';
+type ProfileSection = 'data' | 'membership' | 'attendance';
 
 const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const heatmapWeeks = 16;
+
+const parseMembershipDate = (value: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = dateOnly
+    ? new Date(
+        Number(dateOnly[1]),
+        Number(dateOnly[2]) - 1,
+        Number(dateOnly[3]),
+      )
+    : new Date(value);
+
+  if (
+    dateOnly &&
+    (date.getFullYear() !== Number(dateOnly[1]) ||
+      date.getMonth() !== Number(dateOnly[2]) - 1 ||
+      date.getDate() !== Number(dateOnly[3]))
+  ) {
+    return null;
+  }
+
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatMembershipDate = (date: Date | null) =>
+  date?.toLocaleDateString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }) ?? '—';
+
+const getMembershipStatus = (
+  startDate: Date | null,
+  endDate: Date | null,
+  hasMembership: boolean,
+) => {
+  if (!hasMembership) {
+    return 'Sin membresía';
+  }
+  if (!endDate) {
+    return 'Sin vigencia';
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (endDate < today) {
+    return 'Vencida';
+  }
+  if (startDate && startDate > today) {
+    return 'Por iniciar';
+  }
+
+  return 'Activa';
+};
 
 const startOfWeek = (date: Date) => {
   const result = new Date(date);
@@ -37,8 +96,25 @@ const createHeatmapWeeks = () => {
 };
 
 export default function ProfileView() {
-  const { hasAttendance, total: totalAttendances } = useAttendance();
-  const [activeTab, setActiveTab] = useState<TabName>('Inicio');
+  const { user, setUser } = useAuth();
+  const { hasAttendance, total: totalAttendances, weekTotal } = useAttendance(
+    user?.username ?? null,
+  );
+  const [activeTab, setActiveTab] = useState<TabName>('Perfil');
+  const [expandedSection, setExpandedSection] =
+    useState<ProfileSection | null>('attendance');
+  const fullName = [user?.firstName, user?.lastName]
+    .filter((name) => name?.trim())
+    .join(' ');
+  const displayName = fullName || user?.username || 'Usuario';
+  const membership = user?.membership;
+  const membershipStartDate = parseMembershipDate(membership?.startDate ?? null);
+  const membershipEndDate = parseMembershipDate(membership?.endDate ?? null);
+  const membershipStatus = getMembershipStatus(
+    membershipStartDate,
+    membershipEndDate,
+    Boolean(membership),
+  );
 
   const handleTabPress = (tab: TabName) => {
     setActiveTab(tab);
@@ -56,12 +132,16 @@ export default function ProfileView() {
       case 'Nutrición':
         router.push('/(tabs)/nutrition');
         break;
+      case 'Perfil':
+        router.push('/(tabs)/profile');
+        break;
     }
   };
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      setUser(null);
       router.replace('/login');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
@@ -80,9 +160,7 @@ export default function ProfileView() {
           <View style={styles.header}>
             <Pressable
               style={styles.backButton}
-              onPress={() => {
-                console.log('Volver');
-              }}
+              onPress={() => router.back()}
             >
               <Ionicons
                 name="arrow-back"
@@ -92,7 +170,7 @@ export default function ProfileView() {
             </Pressable>
 
             <ThemedText style={styles.headerTitle}>
-              Mi Perfil
+              Perfil
             </ThemedText>
 
             {/* Espacio para centrar el título */}
@@ -110,70 +188,96 @@ export default function ProfileView() {
           >
             <View style={styles.profileCard}>
               <View style={styles.avatarContainer}>
-                <Ionicons
-                  name="person"
-                  size={60}
-                  color={SportGymColors.primary}
-                />
+                <ThemedText style={styles.avatarInitials}>
+                  {displayName.slice(0, 1).toUpperCase()}
+                </ThemedText>
               </View>
 
               <ThemedText style={styles.profileName}>
-                Juan Pérez
+                {displayName}
+              </ThemedText>
+
+              <ThemedText style={styles.profileUsername}>
+                @{user?.username || 'usuario'}
               </ThemedText>
 
               <ThemedText style={styles.profileEmail}>
-                juan.perez@email.com
+                {user?.email || 'Correo no registrado'}
               </ThemedText>
-
-              <Pressable
-                style={styles.editButton}
-                onPress={() => {
-                  console.log('Editar perfil');
-                }}
-              >
-                <ThemedText style={styles.editButtonText}>
-                  Editar Perfil
-                </ThemedText>
-              </Pressable>
             </View>
 
-            <View style={styles.infoCard}>
-              <ThemedText style={styles.infoTitle}>
-                Información de Membresía
-              </ThemedText>
+            <View style={styles.menuCard}>
+              <ProfileMenuItem
+                icon="person-outline"
+                label="Mis datos"
+                expanded={expandedSection === 'data'}
+                onPress={() =>
+                  setExpandedSection(expandedSection === 'data' ? null : 'data')
+                }
+              />
+              {expandedSection === 'data' && (
+                <View style={styles.infoCard}>
+                  <InfoRow label="Nombre" value={displayName} />
+                  <InfoRow label="Usuario" value={user?.username || '—'} />
+                  <InfoRow label="Correo" value={user?.email || '—'} />
+                  <InfoRow label="Teléfono" value={user?.phone || '—'} />
+                </View>
+              )}
 
-              <View style={styles.infoRow}>
-                <ThemedText style={styles.infoLabel}>
-                  Plan:
-                </ThemedText>
-                <ThemedText style={styles.infoValue}>
-                  Premium
-                </ThemedText>
-              </View>
+              <ProfileMenuItem
+                icon="card-outline"
+                label="Mi membresía"
+                expanded={expandedSection === 'membership'}
+                onPress={() =>
+                  setExpandedSection(
+                    expandedSection === 'membership' ? null : 'membership',
+                  )
+                }
+              />
+              {expandedSection === 'membership' && (
+                <View style={styles.infoCard}>
+                  <InfoRow label="Plan" value={membership?.plan || 'Sin membresía'} />
+                  <InfoRow
+                    label="Estado"
+                    value={membershipStatus}
+                    accent={membershipStatus === 'Activa'}
+                  />
+                  <InfoRow
+                    label="Inicio"
+                    value={formatMembershipDate(membershipStartDate)}
+                  />
+                  <InfoRow
+                    label="Vence"
+                    value={formatMembershipDate(membershipEndDate)}
+                  />
+                </View>
+              )}
 
-              <View style={styles.infoRow}>
-                <ThemedText style={styles.infoLabel}>
-                  Estado:
-                </ThemedText>
-                <ThemedText style={[styles.infoValue, styles.activeValue]}>
-                  Activo
-                </ThemedText>
-              </View>
-
-              <View style={styles.infoRow}>
-                <ThemedText style={styles.infoLabel}>
-                  Vence:
-                </ThemedText>
-                <ThemedText style={styles.infoValue}>
-                  25 Sep 2026
-                </ThemedText>
-              </View>
+              <ProfileMenuItem
+                icon="stats-chart-outline"
+                label="Mi progreso"
+                expanded={expandedSection === 'attendance'}
+                onPress={() =>
+                  setExpandedSection(
+                    expandedSection === 'attendance' ? null : 'attendance',
+                  )
+                }
+              />
+              {expandedSection === 'attendance' && (
+                <View style={styles.progressSummary}>
+                  <ThemedText style={styles.progressText}>
+                    {weekTotal} {weekTotal === 1 ? 'asistencia esta semana' : 'asistencias esta semana'}
+                  </ThemedText>
+                </View>
+              )}
             </View>
 
-            <AttendanceCalendar
-              hasAttendance={hasAttendance}
-              totalAttendances={totalAttendances}
-            />
+            {expandedSection === 'attendance' && (
+              <AttendanceCalendar
+                hasAttendance={hasAttendance}
+                totalAttendances={totalAttendances}
+              />
+            )}
 
             <Pressable
               style={styles.logoutButton}
@@ -225,11 +329,71 @@ export default function ProfileView() {
               active={activeTab === 'Nutrición'}
               onPress={() => handleTabPress('Nutrición')}
             />
+            <BottomTab
+              label="Perfil"
+              icon="person-outline"
+              activeIcon="person"
+              active={activeTab === 'Perfil'}
+              onPress={() => handleTabPress('Perfil')}
+            />
 
           </View>
 
         </View>
       </SafeAreaView>
+    </View>
+  );
+}
+
+type ProfileMenuItemProps = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  expanded: boolean;
+  onPress: () => void;
+};
+
+function ProfileMenuItem({
+  icon,
+  label,
+  expanded,
+  onPress,
+}: ProfileMenuItemProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.menuItem,
+        pressed && styles.menuItemPressed,
+      ]}
+    >
+      <Ionicons name={icon} size={19} color="#252525" />
+      <ThemedText style={styles.menuItemLabel}>{label}</ThemedText>
+      <Ionicons
+        name={expanded ? 'chevron-down' : 'chevron-forward'}
+        size={18}
+        color="#555555"
+      />
+    </Pressable>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <View style={styles.infoRow}>
+      <ThemedText style={styles.infoLabel}>{label}</ThemedText>
+      <ThemedText style={[styles.infoValue, accent && styles.activeValue]}>
+        {value}
+      </ThemedText>
     </View>
   );
 }
@@ -466,11 +630,19 @@ const styles = StyleSheet.create({
     borderRadius: 50,
 
     backgroundColor: '#151616',
+    borderWidth: 2,
+    borderColor: SportGymColors.primary,
 
     alignItems: 'center',
     justifyContent: 'center',
 
     marginBottom: 15,
+  },
+
+  avatarInitials: {
+    color: SportGymColors.primary,
+    fontSize: 38,
+    fontWeight: '800',
   },
 
   profileName: {
@@ -483,6 +655,13 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
 
+  profileUsername: {
+    color: SportGymColors.primary,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+
   profileEmail: {
     color: '#AFAFAF',
 
@@ -490,28 +669,45 @@ const styles = StyleSheet.create({
 
     fontWeight: '500',
 
-    marginBottom: 20,
+    marginBottom: 0,
   },
 
-  editButton: {
-    height: 40,
+  menuCard: {
+    marginBottom: 13,
+    gap: 8,
+  },
 
-    paddingHorizontal: 25,
-
-    borderRadius: 10,
-
-    backgroundColor: SportGymColors.primary,
-
+  menuItem: {
+    minHeight: 46,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 11,
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 13,
   },
 
-  editButtonText: {
-    color: '#FFFFFF',
+  menuItemPressed: {
+    opacity: 0.82,
+  },
 
+  menuItemLabel: {
+    flex: 1,
+    color: '#222222',
     fontSize: 14,
-
     fontWeight: '700',
+    marginLeft: 10,
+  },
+
+  progressSummary: {
+    backgroundColor: '#1B1C1C',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+
+  progressText: {
+    color: '#AFAFAF',
+    fontSize: 13,
   },
 
   // ===================================================
@@ -530,16 +726,6 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
     borderColor: '#202121',
-  },
-
-  infoTitle: {
-    color: '#D8D8D8',
-
-    fontSize: 16,
-
-    fontWeight: '700',
-
-    marginBottom: 15,
   },
 
   infoRow: {

@@ -1,7 +1,20 @@
 import { useEffect, useState } from 'react';
 
-const attendanceDates = new Set<string>();
-const listeners = new Set<() => void>();
+const attendanceByUser = new Map<string, Set<string>>();
+const listenersByUser = new Map<string, Set<() => void>>();
+
+const getUserKey = (userKey: string | null) =>
+  userKey?.trim().toLowerCase() || 'guest';
+
+const getAttendanceDates = (userKey: string) => {
+  let dates = attendanceByUser.get(userKey);
+  if (!dates) {
+    dates = new Set<string>();
+    attendanceByUser.set(userKey, dates);
+  }
+
+  return dates;
+};
 
 const toDateKey = (date: Date) => {
   const year = date.getFullYear();
@@ -11,7 +24,7 @@ const toDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const getAttendanceSummary = () => {
+const getAttendanceSummary = (attendanceDates: Set<string>) => {
   const today = new Date();
   const todayKey = toDateKey(today);
   const yesterday = new Date(today);
@@ -60,7 +73,12 @@ const getAttendanceSummary = () => {
   return { currentStreak, weekTotal, bestStreak };
 };
 
-export const registerAttendance = (date = new Date()) => {
+export const registerAttendance = (
+  userKey: string | null,
+  date = new Date(),
+) => {
+  const normalizedUserKey = getUserKey(userKey);
+  const attendanceDates = getAttendanceDates(normalizedUserKey);
   const dateKey = toDateKey(date);
 
   if (attendanceDates.has(dateKey)) {
@@ -68,26 +86,34 @@ export const registerAttendance = (date = new Date()) => {
   }
 
   attendanceDates.add(dateKey);
-  listeners.forEach((listener) => listener());
+  listenersByUser.get(normalizedUserKey)?.forEach((listener) => listener());
 };
 
-export const hasAttendance = (date: Date) => attendanceDates.has(toDateKey(date));
-
-export const useAttendance = () => {
+export const useAttendance = (userKey: string | null = null) => {
   const [, forceUpdate] = useState(0);
+  const normalizedUserKey = getUserKey(userKey);
+  const attendanceDates = getAttendanceDates(normalizedUserKey);
 
   useEffect(() => {
     const listener = () => forceUpdate((value) => value + 1);
-    listeners.add(listener);
+    let userListeners = listenersByUser.get(normalizedUserKey);
+    if (!userListeners) {
+      userListeners = new Set<() => void>();
+      listenersByUser.set(normalizedUserKey, userListeners);
+    }
+    userListeners.add(listener);
 
     return () => {
-      listeners.delete(listener);
+      userListeners?.delete(listener);
+      if (userListeners?.size === 0) {
+        listenersByUser.delete(normalizedUserKey);
+      }
     };
-  }, []);
+  }, [normalizedUserKey]);
 
   return {
-    hasAttendance,
+    hasAttendance: (date: Date) => attendanceDates.has(toDateKey(date)),
     total: attendanceDates.size,
-    ...getAttendanceSummary(),
+    ...getAttendanceSummary(attendanceDates),
   };
 };
