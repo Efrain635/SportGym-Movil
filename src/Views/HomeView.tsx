@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '../components/themed-text';
 import { SportGymColors } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { registerAttendance } from '../lib/attendance';
+import { registerAttendance, useAttendance } from '../lib/attendance';
 
 type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';
 
@@ -57,12 +57,27 @@ const getCalendarDayNumber = (date: Date) =>
   Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
 
 const millisecondsPerDay = 1000 * 60 * 60 * 24;
+const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+const getCurrentWeekDates = () => {
+  const monday = new Date();
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return date;
+  });
+};
 
 export default function HomeView() {
   const [activeTab, setActiveTab] = useState<TabName>('Inicio');
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const { user } = useAuth();
+  const { hasAttendance, currentStreak, weekTotal, bestStreak } = useAttendance();
+  const weekDates = getCurrentWeekDates();
   const membership = user?.membership ?? null;
   const membershipStartDate = parseMembershipDate(membership?.startDate ?? null);
   const membershipEndDate = parseMembershipDate(membership?.endDate ?? null);
@@ -146,13 +161,26 @@ export default function HomeView() {
                   Listo para entrenar hoy?
                 </ThemedText>
               </View>
-              <Pressable
-                style={styles.profileButton}
-                onPress={() => router.push('/(tabs)/profile')}
-                accessibilityLabel="Abrir perfil"
-              >
-                <Ionicons name="person" size={18} color="#FFFFFF" />
-              </Pressable>
+              <View style={styles.headerActions}>
+                <View
+                  style={styles.notificationButton}
+                  accessible
+                  accessibilityLabel="Notificaciones"
+                >
+                  <Ionicons
+                    name="notifications"
+                    size={19}
+                    color={SportGymColors.primary}
+                  />
+                </View>
+                <Pressable
+                  style={styles.profileButton}
+                  onPress={() => router.push('/(tabs)/profile')}
+                  accessibilityLabel="Abrir perfil"
+                >
+                  <Ionicons name="person" size={18} color="#FFFFFF" />
+                </Pressable>
+              </View>
             </View>
 
             {/* ================================================= */}
@@ -250,87 +278,94 @@ export default function HomeView() {
             </View>
 
             {/* ================================================= */}
-            {/* PRÓXIMO ENTRENAMIENTO */}
+            {/* RACHA DE ASISTENCIAS */}
             {/* ================================================= */}
 
-            <View style={styles.sectionHeader}>
-              <ThemedText style={styles.sectionTitle}>
-                Próximo entrenamiento
-              </ThemedText>
-            </View>
-
-            <View style={styles.workoutCard}>
-
-              <ThemedText style={styles.workoutTitle}>
-                Pecho y Tríceps
-              </ThemedText>
-
-              <ThemedText style={styles.workoutTime}>
-                Hoy · 6:00 PM
-              </ThemedText>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.routineButton,
-                  pressed && styles.buttonPressed,
-                ]}
-                onPress={() => {
-                  handleTabPress('Rutina');
-                }}
-              >
-                <ThemedText style={styles.routineButtonText}>
-                  Ver rutina
-                </ThemedText>
-              </Pressable>
-
-            </View>
-
-            {/* ================================================= */}
-            {/* MI PROGRESO */}
-            {/* ================================================= */}
-
-            <View style={styles.sectionHeader}>
-              <ThemedText style={styles.sectionTitle}>
-                Mi progreso
-              </ThemedText>
-            </View>
-
-            <View style={styles.progressCard}>
-
-              <View style={styles.progressContent}>
-
-                {/* ICONO */}
-                <View style={styles.progressIconContainer}>
-                  <Ionicons
-                    name="barbell-outline"
-                    size={34}
-                    color={SportGymColors.primary}
-                  />
+            <View style={styles.streakCard}>
+              <View style={styles.streakHeader}>
+                <Ionicons name="flame" size={28} color="#E45A32" />
+                <View style={styles.streakCopy}>
+                  <ThemedText style={styles.streakTitle}>
+                    Tu racha de asistencia
+                  </ThemedText>
+                  <ThemedText style={styles.streakCount}>
+                    {currentStreak} {currentStreak === 1 ? 'día' : 'días'} seguidos
+                  </ThemedText>
                 </View>
-
-                {/* PESO */}
-                <View style={styles.weightContainer}>
-
-                  <View style={styles.weightRow}>
-                    <ThemedText style={styles.weight}>
-                      72.5 kg
-                    </ThemedText>
-                  </View>
-
-                  <View style={styles.weightChangeRow}>
-                    <ThemedText style={styles.sinceText}>
-                      Desde el inicio:
-                    </ThemedText>
-
-                    <ThemedText style={styles.weightChange}>
-                      -1.5 kg
-                    </ThemedText>
-                  </View>
-
-                </View>
-
               </View>
 
+              <View style={styles.weekDays}>
+                {weekDates.map((date, index) => {
+                  const attended = hasAttendance(date);
+                  const isToday =
+                    getCalendarDayNumber(date) === getCalendarDayNumber(today);
+
+                  return (
+                    <View key={weekdayLabels[index]} style={styles.weekDay}>
+                      <ThemedText style={styles.weekDayLabel}>
+                        {weekdayLabels[index]}
+                      </ThemedText>
+                      <View
+                        style={[
+                          styles.weekDayIndicator,
+                          attended && styles.attendedDay,
+                          isToday && !attended && styles.todayDay,
+                        ]}
+                        accessibilityLabel={
+                          attended
+                            ? `${weekdayLabels[index]}: asistencia registrada`
+                            : isToday
+                              ? `${weekdayLabels[index]}: hoy`
+                              : `${weekdayLabels[index]}: sin asistencia`
+                        }
+                      >
+                        {attended && (
+                          <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+                        )}
+                        {isToday && !attended && <View style={styles.todayDot} />}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+
+              <View style={styles.streakEncouragement}>
+                <ThemedText style={styles.streakEncouragementTitle}>
+                  ¡Sigue así!
+                </ThemedText>
+                <ThemedText style={styles.streakEncouragementText}>
+                  Cada visita te acerca a tus metas.
+                </ThemedText>
+              </View>
+
+              <View style={styles.streakStats}>
+                <View style={styles.streakStat}>
+                  <Ionicons
+                    name="calendar"
+                    size={21}
+                    color={SportGymColors.primary}
+                  />
+                  <View>
+                    <ThemedText style={styles.streakStatLabel}>
+                      Esta semana
+                    </ThemedText>
+                    <ThemedText style={styles.streakStatValue}>
+                      {weekTotal} {weekTotal === 1 ? 'día' : 'días'}
+                    </ThemedText>
+                  </View>
+                </View>
+                <View style={styles.streakStat}>
+                  <Ionicons name="trophy" size={21} color="#D69B23" />
+                  <View>
+                    <ThemedText style={styles.streakStatLabel}>
+                      Mejor racha
+                    </ThemedText>
+                    <ThemedText style={styles.streakStatValue}>
+                      {bestStreak} {bestStreak === 1 ? 'día' : 'días'}
+                    </ThemedText>
+                  </View>
+                </View>
+              </View>
             </View>
 
             {/* ESPACIO PARA QUE EL ÚLTIMO CARD NO QUEDE PEGADO */}
@@ -387,7 +422,11 @@ export default function HomeView() {
             accessibilityRole="button"
             accessibilityLabel="Abrir chat con Sporti"
           >
-            <Ionicons name="chatbubbles" size={28} color="#FFFFFF" />
+            <MaterialCommunityIcons
+              name="robot-happy-outline"
+              size={32}
+              color="#FFFFFF"
+            />
           </Pressable>
 
         </View>
@@ -553,6 +592,20 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 22,
+  },
+
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+
+  notificationButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   profileButton: {
@@ -764,167 +817,119 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // =======================================================
-  // SECCIONES
-  // =======================================================
-
-  sectionHeader: {
-    marginBottom: 7,
-    marginTop: 0,
-  },
-
-  sectionTitle: {
-    color: '#D8D8D8',
-
-    fontSize: 14,
-
-    fontWeight: '600',
-  },
-
-  // =======================================================
-  // PRÓXIMO ENTRENAMIENTO
-  // =======================================================
-
-  workoutCard: {
-    minHeight: 155,
-
-    backgroundColor: '#1B1C1C',
-
-    borderRadius: 13,
-
-    paddingHorizontal: 17,
-    paddingVertical: 16,
-
-    marginBottom: 13,
-
-    borderWidth: 1,
-    borderColor: '#202121',
-  },
-
-  workoutTitle: {
-    color: '#F1F1F1',
-
-    fontSize: 19,
-
-    fontWeight: '800',
-
-    marginBottom: 8,
-  },
-
-  workoutTime: {
-    color: '#BDBDBD',
-
-    fontSize: 14,
-
-    fontWeight: '500',
-  },
-
-  routineButton: {
-    position: 'absolute',
-
-    right: 15,
-    bottom: 11,
-
-    height: 42,
-
-    paddingHorizontal: 19,
-
-    borderRadius: 9,
-
-    backgroundColor: SportGymColors.primary,
-
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  routineButtonText: {
-    color: '#FFFFFF',
-
-    fontSize: 14,
-
-    fontWeight: '800',
-  },
-
-  // =======================================================
-  // PROGRESO
-  // =======================================================
-
-  progressCard: {
-    minHeight: 129,
-
-    backgroundColor: '#1B1C1C',
-
-    borderRadius: 13,
-
+  streakCard: {
+    backgroundColor: '#F4F4F4',
+    borderRadius: 15,
     paddingHorizontal: 16,
     paddingVertical: 16,
-
-    borderWidth: 1,
-    borderColor: '#202121',
+    marginBottom: 14,
   },
 
-  progressContent: {
-    flex: 1,
-
+  streakHeader: {
     flexDirection: 'row',
-
     alignItems: 'center',
+    marginBottom: 14,
   },
 
-  progressIconContainer: {
-    width: 48,
-    height: 48,
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    marginRight: 16,
+  streakCopy: {
+    marginLeft: 9,
   },
 
-  weightContainer: {
-    flex: 1,
+  streakTitle: {
+    color: '#151515',
+    fontSize: 15,
+    fontWeight: '800',
   },
 
-  weightRow: {
+  streakCount: {
+    color: SportGymColors.primary,
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+
+  weekDays: {
     flexDirection: 'row',
+    marginBottom: 13,
+  },
 
+  weekDay: {
+    flex: 1,
     alignItems: 'center',
+  },
 
+  weekDayLabel: {
+    color: '#333333',
+    fontSize: 12,
+    fontWeight: '700',
     marginBottom: 6,
   },
 
-  weight: {
-    color: '#F0F0F0',
-
-    fontSize: 19,
-
-    fontWeight: '800',
-  },
-
-  weightChangeRow: {
-    flexDirection: 'row',
-
+  weekDayIndicator: {
+    width: 25,
+    height: 25,
+    borderRadius: 13,
     alignItems: 'center',
-
-    justifyContent: 'space-between',
-
-    paddingRight: 2,
+    justifyContent: 'center',
+    backgroundColor: '#D8D8D8',
   },
 
-  sinceText: {
-    color: '#AFAFAF',
-
-    fontSize: 13,
-
-    fontWeight: '500',
+  attendedDay: {
+    backgroundColor: SportGymColors.primary,
   },
 
-  weightChange: {
-    color: SportGymColors.primary,
+  todayDay: {
+    backgroundColor: '#D92D55',
+  },
 
-    fontSize: 15,
+  todayDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
+  },
 
+  streakEncouragement: {
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+
+  streakEncouragementTitle: {
+    color: '#171717',
+    fontSize: 14,
     fontWeight: '800',
+  },
+
+  streakEncouragementText: {
+    color: '#555555',
+    fontSize: 12,
+    marginTop: 3,
+  },
+
+  streakStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#DEDEDE',
+  },
+
+  streakStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+
+  streakStatLabel: {
+    color: '#555555',
+    fontSize: 11,
+  },
+
+  streakStatValue: {
+    color: '#171717',
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 1,
   },
 
   // =======================================================
