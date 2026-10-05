@@ -47,7 +47,7 @@ export default function LoginScreen() {
         email: userData.email || '',
       });
 
-      router.replace("/(tabs)");
+      router.replace("/terminos");
     } catch (error: unknown) {
       const errorCode = (error as { code?: string }).code;
       const errorMessage = (error as { message?: string }).message;
