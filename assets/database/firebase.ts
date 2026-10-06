@@ -10,12 +10,13 @@ import {
 import { getReactNativePersistence } from "firebase/auth";
 
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import {
-  addDoc,
+    addDoc,
     collection,
-  deleteDoc,
+    deleteDoc,
     doc,
-  getDoc,
+    getDoc,
     getDocs,
     getFirestore,
     limit,
@@ -41,6 +42,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 const createAuth = () => {
+  if (Platform.OS === "web") {
+    return getAuth(app);
+  }
+
   try {
     return initializeAuth(app, {
       persistence: getReactNativePersistence(ReactNativeAsyncStorage),
@@ -240,14 +245,22 @@ export type SavedFavoriteExercise = {
   categoria: string;
 };
 
-const getRoutineDocumentId = (clientId: string, exerciseId: string, day: string) =>
+const getRoutineDocumentId = (
+  clientId: string,
+  exerciseId: string,
+  day: string,
+) =>
   `${clientId}_${exerciseId}_${day
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")}`;
 
 export async function saveExerciseToRoutine(input: RoutineExerciseInput) {
-  const routineId = getRoutineDocumentId(input.clientId, input.exercise.id, input.day);
+  const routineId = getRoutineDocumentId(
+    input.clientId,
+    input.exercise.id,
+    input.day,
+  );
   await setDoc(
     doc(db, "rutinas", routineId),
     {
@@ -302,8 +315,13 @@ export async function updateRoutineExerciseTargets(
 const getFavoriteDocument = (clientId: string, exerciseId: string) =>
   doc(db, "favoritos", `${clientId}_${exerciseId}`);
 
-export async function hasFavoriteExercise(clientId: string, exerciseId: string) {
-  const favoriteDocument = await getDoc(getFavoriteDocument(clientId, exerciseId));
+export async function hasFavoriteExercise(
+  clientId: string,
+  exerciseId: string,
+) {
+  const favoriteDocument = await getDoc(
+    getFavoriteDocument(clientId, exerciseId),
+  );
   return favoriteDocument.exists();
 }
 
@@ -321,7 +339,10 @@ export async function saveFavoriteExercise(input: FavoriteExerciseInput) {
   });
 }
 
-export async function removeFavoriteExercise(clientId: string, exerciseId: string) {
+export async function removeFavoriteExercise(
+  clientId: string,
+  exerciseId: string,
+) {
   await deleteDoc(getFavoriteDocument(clientId, exerciseId));
 }
 
@@ -371,6 +392,34 @@ export async function saveCompletedWorkout(input: {
   });
 
   return workoutDocument.id;
+}
+
+export async function getClientWorkoutProgress(clientId: string) {
+  if (!clientId.trim()) {
+    throw new Error("missing-client-id");
+  }
+
+  const workoutsQuery = query(
+    collection(db, "entrenamientos"),
+    where("clienteId", "==", clientId),
+  );
+  const snapshot = await getDocs(workoutsQuery);
+  const completedWorkouts = snapshot.docs.filter(
+    (workout) => workout.data().estado === "completado",
+  );
+
+  const totalExercises = completedWorkouts.reduce((total, workout) => {
+    const data = workout.data();
+    if (Array.isArray(data.ejercicios)) {
+      return total + data.ejercicios.length;
+    }
+    return total + (typeof data.totalEjercicios === "number" ? data.totalEjercicios : 0);
+  }, 0);
+
+  return {
+    totalExercises,
+    totalWorkouts: completedWorkouts.length,
+  };
 }
 
 export async function updateClientProfile(
@@ -471,6 +520,96 @@ export async function updateClientProfile(
     restricciones: nextRestrictions,
     fechaUltimoCambio: serverTimestamp(),
   });
+}
+
+export async function updateClientPersonalData(
+  clientId: string,
+  profile: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    birthDate: string | null;
+    gender: string | null;
+    weight: number | null;
+    height: number | null;
+    level: "principiante" | "intermedio" | "avanzado" | undefined;
+  },
+) {
+  if (!clientId.trim()) {
+    throw new Error("missing-client-id");
+  }
+
+  await updateDoc(doc(db, "clientes", clientId), {
+    nombre: profile.firstName.trim(),
+    apellido: profile.lastName.trim(),
+    telefono: profile.phone.trim() || null,
+    fechaNacimiento: profile.birthDate,
+    genero: profile.gender,
+    peso: profile.weight,
+    estatura: profile.height,
+    ...(profile.level ? { nivel: profile.level } : {}),
+    fechaUltimoCambio: serverTimestamp(),
+  });
+}
+
+export function getClientPersonalData(client: ClientRecord) {
+  const getNumber = (keys: string[]) => {
+    for (const key of keys) {
+      const value = client[key];
+      const number = typeof value === "number"
+        ? value
+        : typeof value === "string"
+          ? Number(value.replace(",", "."))
+          : Number.NaN;
+      if (Number.isFinite(number) && number > 0) {
+        return number;
+      }
+    }
+    return null;
+  };
+  const birthDate = normalizeClientDate(
+    client.fechaNacimiento ?? client.fecha_nacimiento ?? client.birthDate ?? client.dateOfBirth,
+  );
+  const directAge = getNumber(["edad", "age"]);
+  const age = directAge ?? (birthDate ? (() => {
+    const today = new Date();
+    const birthday = new Date(`${birthDate.slice(0, 10)}T00:00:00`);
+    let years = today.getFullYear() - birthday.getFullYear();
+    if (
+      today.getMonth() < birthday.getMonth() ||
+      (today.getMonth() === birthday.getMonth() && today.getDate() < birthday.getDate())
+    ) {
+      years -= 1;
+    }
+    return years > 0 ? years : null;
+  })() : null);
+  const gender = getFirstString(client, ["genero", "género", "gender", "sexo"]);
+  const level = getFirstString(client, ["nivel", "nivelActividad", "activityLevel"]);
+  const validLevels = ["principiante", "intermedio", "avanzado"] as const;
+  const machines = client.maquinasDisponibles ?? client.maquinas ?? client.gymMachines;
+  const restrictions = client.restricciones ?? client.restrictions;
+  const daysPerWeek = getNumber(["diasEntrenamiento", "daysPerWeek"]);
+
+  return {
+    birthDate,
+    gender,
+    weight: getNumber(["peso", "weight"]),
+    height: getNumber(["estatura", "altura", "height"]),
+    age,
+    level: validLevels.find((value) => value === level) as
+      | "principiante"
+      | "intermedio"
+      | "avanzado"
+      | undefined,
+    goal: getFirstString(client, ["objetivo", "goal"]) ?? undefined,
+    daysPerWeek: daysPerWeek ?? undefined,
+    gymMachines: Array.isArray(machines)
+      ? machines.filter((value): value is string => typeof value === "string")
+      : undefined,
+    restrictions: Array.isArray(restrictions)
+      ? restrictions.filter((value): value is string => typeof value === "string")
+      : undefined,
+  };
 }
 
 type RegisterUserInput = {

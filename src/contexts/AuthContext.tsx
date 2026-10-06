@@ -18,6 +18,8 @@ export type User = {
   weight?: number | null;
   height?: number | null;
   age?: number | null;
+  birthDate?: string | null;
+  gender?: string | null;
 };
 
 export type MembershipInfo = {

@@ -14,8 +14,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { SportGymColors } from "@/constants/theme";
 import {
-  getClientMembership,
-  verifyClientCredentials,
+  getClientPersonalData,
+    getClientMembership,
+    verifyClientCredentials,
 } from "../../assets/database/firebase";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -42,24 +43,21 @@ export default function LoginScreen() {
 
     try {
       const userData = await verifyClientCredentials(username, password);
-      const clientUsername =
-        userData.usuario || userData.username || username;
+      const clientUsername = userData.usuario || userData.username || username;
+      const personalData = getClientPersonalData(userData);
 
       setUser({
         clientId: userData.documentId,
-        firstName: userData.nombre || userData.firstName || '',
-        lastName: userData.apellido || userData.lastName || '',
+        firstName: userData.nombre || userData.firstName || "",
+        lastName: userData.apellido || userData.lastName || "",
         username: clientUsername,
-        email: userData.email || userData.correo || '',
-        phone:
-          userData.telefono ||
-          userData.celular ||
-          userData.phone ||
-          null,
+        email: userData.email || userData.correo || "",
+        phone: userData.telefono || userData.celular || userData.phone || null,
         membership: getClientMembership(userData),
+        ...personalData,
       });
 
-      router.replace('/terminos' as never);
+      router.replace("/terminos" as never);
     } catch (error: unknown) {
       const errorCode = (error as { code?: string }).code;
       const errorMessage = (error as { message?: string }).message;

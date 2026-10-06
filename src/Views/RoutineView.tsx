@@ -2,25 +2,25 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  ImageBackground,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    ImageBackground,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  getClientFavoriteExercises,
-  getClientRoutineExercises,
-  saveCompletedWorkout,
-  updateRoutineExerciseTargets,
-  type CompletedWorkoutExercise,
-  removeFavoriteExercise,
-  type SavedFavoriteExercise,
-  type SavedRoutineExercise,
+    getClientFavoriteExercises,
+    getClientRoutineExercises,
+    removeFavoriteExercise,
+    saveCompletedWorkout,
+    updateRoutineExerciseTargets,
+    type CompletedWorkoutExercise,
+    type SavedFavoriteExercise,
+    type SavedRoutineExercise,
 } from "../../assets/database/firebase";
 import { ThemedText } from "../components/themed-text";
 import { SportGymColors } from "../constants/theme";
@@ -42,17 +42,31 @@ type Routine = Pick<
   | "repeticionesAsignadas"
 >;
 
-const routineDays = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const currentDay = new Intl.DateTimeFormat("es-MX", { weekday: "long" }).format(new Date());
-const currentDayLabel = currentDay.charAt(0).toUpperCase() + currentDay.slice(1);
+const routineDays = [
+  "Lunes",
+  "Martes",
+  "Miércoles",
+  "Jueves",
+  "Viernes",
+  "Sábado",
+];
+const currentDay = new Intl.DateTimeFormat("es-MX", { weekday: "long" }).format(
+  new Date(),
+);
+const currentDayLabel =
+  currentDay.charAt(0).toUpperCase() + currentDay.slice(1);
 
 export default function RoutineView() {
   const [activeFilter, setActiveFilter] = useState<Filter>("Todos");
   const [activeTab, setActiveTab] = useState<TabName>("Rutina");
-  const [screen, setScreen] = useState<"hub" | "routine" | "saved" | "session">("hub");
+  const [screen, setScreen] = useState<"hub" | "routine" | "saved" | "session">(
+    "hub",
+  );
   const [selectedRoutineDay, setSelectedRoutineDay] = useState("Lunes");
   const [routines, setRoutines] = useState<Routine[]>([]);
-  const [savedExercises, setSavedExercises] = useState<SavedFavoriteExercise[]>([]);
+  const [savedExercises, setSavedExercises] = useState<SavedFavoriteExercise[]>(
+    [],
+  );
   const [isLoadingRoutine, setIsLoadingRoutine] = useState(false);
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
   const { user } = useAuth();
@@ -85,7 +99,11 @@ export default function RoutineView() {
         }
       })
       .catch(() => {
-        if (isCurrent) Alert.alert("No se pudo cargar Mi rutina", "Revisa tu conexión e inténtalo de nuevo.");
+        if (isCurrent)
+          Alert.alert(
+            "No se pudo cargar Mi rutina",
+            "Revisa tu conexión e inténtalo de nuevo.",
+          );
       })
       .finally(() => {
         if (isCurrent) setIsLoadingRoutine(false);
@@ -111,7 +129,11 @@ export default function RoutineView() {
         if (isCurrent) setSavedExercises(favorites);
       })
       .catch(() => {
-        if (isCurrent) Alert.alert("No se pudieron cargar tus favoritos", "Revisa tu conexión e inténtalo de nuevo.");
+        if (isCurrent)
+          Alert.alert(
+            "No se pudieron cargar tus favoritos",
+            "Revisa tu conexión e inténtalo de nuevo.",
+          );
       })
       .finally(() => {
         if (isCurrent) setIsLoadingFavorites(false);
@@ -149,7 +171,9 @@ export default function RoutineView() {
     return (
       <WorkoutSessionScreen
         day={selectedRoutineDay}
-        exercises={routines.filter((routine) => routine.dia === selectedRoutineDay)}
+        exercises={routines.filter(
+          (routine) => routine.dia === selectedRoutineDay,
+        )}
         user={user}
         onBack={() => setScreen("routine")}
       />
@@ -176,7 +200,10 @@ export default function RoutineView() {
               current.filter((exercise) => exercise.ejercicioId !== exerciseId),
             );
           } catch {
-            Alert.alert("No se pudo quitar el favorito", "Inténtalo de nuevo en unos momentos.");
+            Alert.alert(
+              "No se pudo quitar el favorito",
+              "Inténtalo de nuevo en unos momentos.",
+            );
           }
         }}
       />
@@ -239,23 +266,29 @@ export default function RoutineView() {
             showsVerticalScrollIndicator={false}
           >
             {routineDays
-              .filter((day) => filteredRoutines.some((routine) => routine.dia === day))
+              .filter((day) =>
+                filteredRoutines.some((routine) => routine.dia === day),
+              )
               .map((day) => (
-              <RoutineDayCard
-                key={day}
-                day={day}
-                exercises={filteredRoutines.filter((routine) => routine.dia === day)}
-                onPress={() => {
-                  setSelectedRoutineDay(day);
-                  setScreen("session");
-                }}
-              />
-            ))}
+                <RoutineDayCard
+                  key={day}
+                  day={day}
+                  exercises={filteredRoutines.filter(
+                    (routine) => routine.dia === day,
+                  )}
+                  onPress={() => {
+                    setSelectedRoutineDay(day);
+                    setScreen("session");
+                  }}
+                />
+              ))}
 
             {isLoadingRoutine ? (
               <View style={styles.emptyContainer}>
                 <ActivityIndicator color={SportGymColors.primary} />
-                <ThemedText style={styles.emptyText}>Cargando Mi rutina...</ThemedText>
+                <ThemedText style={styles.emptyText}>
+                  Cargando Mi rutina...
+                </ThemedText>
               </View>
             ) : filteredRoutines.length === 0 ? (
               <View style={styles.emptyContainer}>
@@ -269,8 +302,13 @@ export default function RoutineView() {
                     : "Inicia sesión como cliente para ver Mi rutina"}
                 </ThemedText>
                 {user?.clientId ? (
-                  <Pressable style={styles.exploreButton} onPress={() => router.push("/explore")}>
-                    <ThemedText style={styles.exploreButtonText}>Explorar ejercicios</ThemedText>
+                  <Pressable
+                    style={styles.exploreButton}
+                    onPress={() => router.push("/explore")}
+                  >
+                    <ThemedText style={styles.exploreButtonText}>
+                      Explorar ejercicios
+                    </ThemedText>
                   </Pressable>
                 ) : null}
               </View>
@@ -369,7 +407,9 @@ function TrainingHub({
                 {isSavedView ? "Guardados" : "Entrenamiento"}
               </ThemedText>
               <ThemedText style={styles.hubSubtitle}>
-                {isSavedView ? "Tus ejercicios favoritos" : "Tu siguiente sesión empieza aquí"}
+                {isSavedView
+                  ? "Tus ejercicios favoritos"
+                  : "Tu siguiente sesión empieza aquí"}
               </ThemedText>
             </View>
             <View style={styles.headerRightSpace} />
@@ -387,40 +427,97 @@ function TrainingHub({
               isLoadingSaved ? (
                 <View style={styles.savedState}>
                   <ActivityIndicator color={SportGymColors.primary} />
-                  <ThemedText style={styles.savedDescription}>Cargando favoritos...</ThemedText>
+                  <ThemedText style={styles.savedDescription}>
+                    Cargando favoritos...
+                  </ThemedText>
                 </View>
               ) : savedExercises.length > 0 ? (
                 <View style={styles.savedExercisesList}>
                   {savedExercises.map((exercise) => (
-                    <View key={exercise.id} style={styles.savedExerciseRow}>
-                      <View style={styles.actionIcon}>
-                        <Ionicons name="barbell-outline" size={21} color="#FFFFFF" />
+                    <View key={exercise.id} style={styles.savedExerciseCard}>
+                      <View style={styles.savedExerciseMain}>
+                        <View style={styles.savedExerciseIcon}>
+                          <Ionicons
+                            name="barbell-outline"
+                            size={22}
+                            color="#B7D9A9"
+                          />
+                        </View>
+                        <View style={styles.savedExerciseTitleBlock}>
+                          <ThemedText
+                            style={styles.savedExerciseName}
+                            numberOfLines={2}
+                          >
+                            {exercise.ejercicioNombre}
+                          </ThemedText>
+                          <View style={styles.favoriteBadge}>
+                            <Ionicons name="heart" size={11} color="#F18B86" />
+                            <ThemedText style={styles.favoriteBadgeText}>
+                              FAVORITO
+                            </ThemedText>
+                          </View>
+                        </View>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.removeFavoriteButton,
+                            pressed && styles.tabPressed,
+                          ]}
+                          onPress={() => onRemoveFavorite(exercise.ejercicioId)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Quitar ${exercise.ejercicioNombre} de favoritos`}
+                          hitSlop={8}
+                        >
+                          <Ionicons
+                            name="heart-dislike-outline"
+                            size={19}
+                            color="#F18B86"
+                          />
+                        </Pressable>
                       </View>
-                      <View style={styles.actionCopy}>
-                        <ThemedText style={styles.actionTitle}>
-                          {exercise.ejercicioNombre}
-                        </ThemedText>
-                        <ThemedText style={styles.actionDescription}>
-                          {exercise.grupoMuscular} · {exercise.equipo}
-                        </ThemedText>
+                      <View style={styles.savedExerciseTags}>
+                        <View style={styles.savedExerciseTag}>
+                          <Ionicons
+                            name="body-outline"
+                            size={13}
+                            color="#B8C2B2"
+                          />
+                          <ThemedText
+                            style={styles.savedExerciseTagText}
+                            numberOfLines={1}
+                          >
+                            {exercise.grupoMuscular}
+                          </ThemedText>
+                        </View>
+                        <View style={styles.savedExerciseTag}>
+                          <Ionicons
+                            name="barbell-outline"
+                            size={13}
+                            color="#B8C2B2"
+                          />
+                          <ThemedText
+                            style={styles.savedExerciseTagText}
+                            numberOfLines={1}
+                          >
+                            {exercise.equipo}
+                          </ThemedText>
+                        </View>
                       </View>
-                      <Pressable
-                        onPress={() => onRemoveFavorite(exercise.ejercicioId)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Quitar ${exercise.ejercicioNombre} de favoritos`}
-                      >
-                        <Ionicons name="heart" size={21} color="#F07A79" />
-                      </Pressable>
                     </View>
                   ))}
                 </View>
               ) : (
                 <View style={styles.savedState}>
                   <View style={styles.savedIcon}>
-                    <Ionicons name="heart-outline" size={30} color={SportGymColors.primary} />
+                    <Ionicons
+                      name="heart-outline"
+                      size={30}
+                      color={SportGymColors.primary}
+                    />
                   </View>
                   <ThemedText style={styles.savedTitle}>
-                    {isClientSignedIn ? "Aún no guardas ejercicios" : "Inicia sesión como cliente"}
+                    {isClientSignedIn
+                      ? "Aún no guardas ejercicios"
+                      : "Inicia sesión como cliente"}
                   </ThemedText>
                   <ThemedText style={styles.savedDescription}>
                     {isClientSignedIn
@@ -429,11 +526,20 @@ function TrainingHub({
                   </ThemedText>
                   {isClientSignedIn ? (
                     <Pressable
-                      style={({ pressed }) => [styles.savedButton, pressed && styles.filterPressed]}
+                      style={({ pressed }) => [
+                        styles.savedButton,
+                        pressed && styles.filterPressed,
+                      ]}
                       onPress={onExplore}
                     >
-                      <ThemedText style={styles.savedButtonText}>Explorar ejercicios</ThemedText>
-                      <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+                      <ThemedText style={styles.savedButtonText}>
+                        Explorar ejercicios
+                      </ThemedText>
+                      <Ionicons
+                        name="arrow-forward"
+                        size={17}
+                        color="#FFFFFF"
+                      />
                     </Pressable>
                   ) : null}
                 </View>
@@ -463,7 +569,11 @@ function TrainingHub({
                       <ThemedText style={styles.heroButtonText}>
                         Ver mi rutina
                       </ThemedText>
-                      <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+                      <Ionicons
+                        name="arrow-forward"
+                        size={17}
+                        color="#FFFFFF"
+                      />
                     </Pressable>
                   </View>
                 </ImageBackground>
@@ -539,7 +649,10 @@ type ActionCardProps = {
 function ActionCard({ icon, title, description, onPress }: ActionCardProps) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.actionCard, pressed && styles.routinePressed]}
+      style={({ pressed }) => [
+        styles.actionCard,
+        pressed && styles.routinePressed,
+      ]}
       onPress={onPress}
       accessibilityRole="button"
     >
@@ -597,7 +710,10 @@ type RoutineDayCardProps = {
 function RoutineDayCard({ day, exercises, onPress }: RoutineDayCardProps) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.routineCard, pressed && styles.routinePressed]}
+      style={({ pressed }) => [
+        styles.routineCard,
+        pressed && styles.routinePressed,
+      ]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Iniciar entrenamiento del ${day}`}
@@ -606,7 +722,8 @@ function RoutineDayCard({ day, exercises, onPress }: RoutineDayCardProps) {
         <View>
           <ThemedText style={styles.routineDay}>{day}</ThemedText>
           <ThemedText style={styles.dayExerciseCount}>
-            {exercises.length} {exercises.length === 1 ? "ejercicio" : "ejercicios"}
+            {exercises.length}{" "}
+            {exercises.length === 1 ? "ejercicio" : "ejercicios"}
           </ThemedText>
         </View>
         <View style={styles.startDayIcon}>
@@ -614,12 +731,19 @@ function RoutineDayCard({ day, exercises, onPress }: RoutineDayCardProps) {
         </View>
       </View>
       <ThemedText style={styles.dayExercisePreview} numberOfLines={2}>
-        {exercises.slice(0, 3).map((exercise) => exercise.ejercicioNombre).join(" · ")}
+        {exercises
+          .slice(0, 3)
+          .map((exercise) => exercise.ejercicioNombre)
+          .join(" · ")}
         {exercises.length > 3 ? ` +${exercises.length - 3} más` : ""}
       </ThemedText>
       <View style={styles.dayCardFooter}>
         <ThemedText style={styles.dayCardMeta}>Toca para iniciar</ThemedText>
-        <Ionicons name="arrow-forward" size={16} color={SportGymColors.primary} />
+        <Ionicons
+          name="arrow-forward"
+          size={16}
+          color={SportGymColors.primary}
+        />
       </View>
     </Pressable>
   );
@@ -637,7 +761,12 @@ type WorkoutSessionScreenProps = {
   onBack: () => void;
 };
 
-function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionScreenProps) {
+function WorkoutSessionScreen({
+  day,
+  exercises,
+  user,
+  onBack,
+}: WorkoutSessionScreenProps) {
   const [startedAt, setStartedAt] = useState<Date | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
@@ -646,12 +775,13 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
   const [restRemaining, setRestRemaining] = useState(0);
   const [isRestRunning, setIsRestRunning] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
-  const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>(() =>
-    exercises.map((exercise) => ({
-      ...exercise,
-      seriesRealizadas: "",
-      repeticionesRealizadas: "",
-    })),
+  const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>(
+    () =>
+      exercises.map((exercise) => ({
+        ...exercise,
+        seriesRealizadas: "",
+        repeticionesRealizadas: "",
+      })),
   );
 
   useEffect(() => {
@@ -676,12 +806,17 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
   }, [isRestRunning, restRemaining]);
 
   const formatDuration = (totalSeconds: number) => {
-    const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
+    const minutes = Math.floor(totalSeconds / 60)
+      .toString()
+      .padStart(2, "0");
     const seconds = (totalSeconds % 60).toString().padStart(2, "0");
     return `${minutes}:${seconds}`;
   };
 
-  const updateSessionExercise = (index: number, patch: Partial<SessionExercise>) => {
+  const updateSessionExercise = (
+    index: number,
+    patch: Partial<SessionExercise>,
+  ) => {
     setSessionExercises((current) =>
       current.map((exercise, exerciseIndex) =>
         exerciseIndex === index ? { ...exercise, ...patch } : exercise,
@@ -693,25 +828,31 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
   const persistTargets = async (exercise: SessionExercise) => {
     const series = exercise.seriesAsignadas ?? 3;
     const repetitions = exercise.repeticionesAsignadas ?? 12;
-    if (series < 1 || series > 99 || repetitions < 1 || repetitions > 999) return;
+    if (series < 1 || series > 99 || repetitions < 1 || repetitions > 999)
+      return;
     try {
-      await updateRoutineExerciseTargets(
-        exercise.id,
-        series,
-        repetitions,
-      );
+      await updateRoutineExerciseTargets(exercise.id, series, repetitions);
     } catch {
-      Alert.alert("No se guardaron los objetivos", "Verifica tu conexión e inténtalo de nuevo.");
+      Alert.alert(
+        "No se guardaron los objetivos",
+        "Verifica tu conexión e inténtalo de nuevo.",
+      );
     }
   };
 
   const handleStartWorkout = () => {
     if (!user?.clientId) {
-      Alert.alert("Inicia sesión", "Necesitas iniciar sesión como cliente para registrar el entrenamiento.");
+      Alert.alert(
+        "Inicia sesión",
+        "Necesitas iniciar sesión como cliente para registrar el entrenamiento.",
+      );
       return;
     }
     if (sessionExercises.length === 0) {
-      Alert.alert("Rutina vacía", "Agrega ejercicios a este día antes de iniciar.");
+      Alert.alert(
+        "Rutina vacía",
+        "Agrega ejercicios a este día antes de iniciar.",
+      );
       return;
     }
     setStartedAt(new Date());
@@ -726,7 +867,10 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
 
     const seconds = Number(restDuration);
     if (!Number.isInteger(seconds) || seconds < 15 || seconds > 600) {
-      Alert.alert("Tiempo no válido", "El descanso debe estar entre 15 y 600 segundos.");
+      Alert.alert(
+        "Tiempo no válido",
+        "El descanso debe estar entre 15 y 600 segundos.",
+      );
       return;
     }
     setRestRemaining(seconds);
@@ -757,21 +901,28 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
     });
 
     if (hasInvalidResults) {
-      setValidationMessage("Revisa los objetivos y registra series y repeticiones realizadas para cada ejercicio.");
+      setValidationMessage(
+        "Revisa los objetivos y registra series y repeticiones realizadas para cada ejercicio.",
+      );
       return;
     }
 
     setIsSaving(true);
     setValidationMessage("");
-    const durationSeconds = Math.max(1, Math.floor((Date.now() - startedAt.getTime()) / 1000));
-    const completedExercises: CompletedWorkoutExercise[] = sessionExercises.map((exercise) => ({
-      ejercicioId: exercise.ejercicioId,
-      ejercicioNombre: exercise.ejercicioNombre,
-      seriesAsignadas: exercise.seriesAsignadas || 3,
-      repeticionesAsignadas: exercise.repeticionesAsignadas || 12,
-      seriesRealizadas: Number(exercise.seriesRealizadas),
-      repeticionesRealizadas: Number(exercise.repeticionesRealizadas),
-    }));
+    const durationSeconds = Math.max(
+      1,
+      Math.floor((Date.now() - startedAt.getTime()) / 1000),
+    );
+    const completedExercises: CompletedWorkoutExercise[] = sessionExercises.map(
+      (exercise) => ({
+        ejercicioId: exercise.ejercicioId,
+        ejercicioNombre: exercise.ejercicioNombre,
+        seriesAsignadas: exercise.seriesAsignadas || 3,
+        repeticionesAsignadas: exercise.repeticionesAsignadas || 12,
+        seriesRealizadas: Number(exercise.seriesRealizadas),
+        repeticionesRealizadas: Number(exercise.repeticionesRealizadas),
+      }),
+    );
 
     try {
       await saveCompletedWorkout({
@@ -791,7 +942,10 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
         `Sesión del ${day.toLowerCase()} completada en ${formatDuration(durationSeconds)}.`,
       );
     } catch {
-      Alert.alert("No se pudo finalizar", "No pudimos guardar la sesión. Inténtalo otra vez.");
+      Alert.alert(
+        "No se pudo finalizar",
+        "No pudimos guardar la sesión. Inténtalo otra vez.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -802,7 +956,11 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
       <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
         <View style={styles.card}>
           <View style={styles.header}>
-            <Pressable style={styles.backButton} onPress={onBack} accessibilityLabel="Volver a Mi rutina">
+            <Pressable
+              style={styles.backButton}
+              onPress={onBack}
+              accessibilityLabel="Volver a Mi rutina"
+            >
               <Ionicons name="arrow-back" size={25} color="#D8D8D8" />
             </Pressable>
             <ThemedText style={styles.headerTitle}>Entrenamiento</ThemedText>
@@ -818,23 +976,35 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
               <View>
                 <ThemedText style={styles.sessionDay}>{day}</ThemedText>
                 <ThemedText style={styles.sessionSummaryText}>
-                  {sessionExercises.length} {sessionExercises.length === 1 ? "ejercicio" : "ejercicios"}
+                  {sessionExercises.length}{" "}
+                  {sessionExercises.length === 1 ? "ejercicio" : "ejercicios"}
                 </ThemedText>
               </View>
               <View style={styles.elapsedBox}>
-                <Ionicons name="time-outline" size={17} color={SportGymColors.primary} />
-                <ThemedText style={styles.elapsedText}>{formatDuration(elapsedSeconds)}</ThemedText>
+                <Ionicons
+                  name="time-outline"
+                  size={17}
+                  color={SportGymColors.primary}
+                />
+                <ThemedText style={styles.elapsedText}>
+                  {formatDuration(elapsedSeconds)}
+                </ThemedText>
               </View>
             </View>
 
             {!startedAt ? (
               <Pressable
-                style={({ pressed }) => [styles.startWorkoutButton, pressed && styles.routinePressed]}
+                style={({ pressed }) => [
+                  styles.startWorkoutButton,
+                  pressed && styles.routinePressed,
+                ]}
                 onPress={handleStartWorkout}
                 disabled={sessionExercises.length === 0}
               >
                 <Ionicons name="play" size={18} color="#FFFFFF" />
-                <ThemedText style={styles.startWorkoutText}>Iniciar entrenamiento</ThemedText>
+                <ThemedText style={styles.startWorkoutText}>
+                  Iniciar entrenamiento
+                </ThemedText>
               </Pressable>
             ) : null}
 
@@ -842,22 +1012,33 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
               <View key={exercise.id} style={styles.sessionExerciseCard}>
                 <View style={styles.sessionExerciseHeading}>
                   <View style={styles.sessionExerciseNumber}>
-                    <ThemedText style={styles.sessionExerciseNumberText}>{index + 1}</ThemedText>
+                    <ThemedText style={styles.sessionExerciseNumberText}>
+                      {index + 1}
+                    </ThemedText>
                   </View>
                   <View style={styles.sessionExerciseCopy}>
-                    <ThemedText style={styles.sessionExerciseName}>{exercise.ejercicioNombre}</ThemedText>
+                    <ThemedText style={styles.sessionExerciseName}>
+                      {exercise.ejercicioNombre}
+                    </ThemedText>
                     <ThemedText style={styles.sessionExerciseMeta}>
                       {exercise.grupoMuscular} · {exercise.equipo}
                     </ThemedText>
                   </View>
-                  {exercise.seriesRealizadas && exercise.repeticionesRealizadas ? (
-                    <Ionicons name="checkmark-circle" size={20} color={SportGymColors.primary} />
+                  {exercise.seriesRealizadas &&
+                  exercise.repeticionesRealizadas ? (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color={SportGymColors.primary}
+                    />
                   ) : null}
                 </View>
 
                 <View style={styles.targetsRow}>
                   <View style={styles.targetField}>
-                    <ThemedText style={styles.targetLabel}>Series objetivo</ThemedText>
+                    <ThemedText style={styles.targetLabel}>
+                      Series objetivo
+                    </ThemedText>
                     <TextInput
                       style={styles.targetInput}
                       value={String(exercise.seriesAsignadas ?? 3)}
@@ -865,7 +1046,9 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
                       editable={!isCompleted}
                       onChangeText={(value) => {
                         if (/^\d{0,2}$/.test(value)) {
-                          updateSessionExercise(index, { seriesAsignadas: value ? Number(value) : 0 });
+                          updateSessionExercise(index, {
+                            seriesAsignadas: value ? Number(value) : 0,
+                          });
                         }
                       }}
                       onBlur={() => void persistTargets(exercise)}
@@ -874,7 +1057,9 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
                   </View>
                   <ThemedText style={styles.targetMultiply}>×</ThemedText>
                   <View style={styles.targetField}>
-                    <ThemedText style={styles.targetLabel}>Repeticiones objetivo</ThemedText>
+                    <ThemedText style={styles.targetLabel}>
+                      Repeticiones objetivo
+                    </ThemedText>
                     <TextInput
                       style={styles.targetInput}
                       value={String(exercise.repeticionesAsignadas ?? 12)}
@@ -882,7 +1067,9 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
                       editable={!isCompleted}
                       onChangeText={(value) => {
                         if (/^\d{0,3}$/.test(value)) {
-                          updateSessionExercise(index, { repeticionesAsignadas: value ? Number(value) : 0 });
+                          updateSessionExercise(index, {
+                            repeticionesAsignadas: value ? Number(value) : 0,
+                          });
                         }
                       }}
                       onBlur={() => void persistTargets(exercise)}
@@ -893,12 +1080,17 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
 
                 <View style={styles.actualResultsRow}>
                   <View style={styles.actualField}>
-                    <ThemedText style={styles.targetLabel}>Series realizadas</ThemedText>
+                    <ThemedText style={styles.targetLabel}>
+                      Series realizadas
+                    </ThemedText>
                     <TextInput
                       style={styles.actualInput}
                       value={exercise.seriesRealizadas}
                       onChangeText={(value) => {
-                        if (/^\d{0,2}$/.test(value)) updateSessionExercise(index, { seriesRealizadas: value });
+                        if (/^\d{0,2}$/.test(value))
+                          updateSessionExercise(index, {
+                            seriesRealizadas: value,
+                          });
                       }}
                       keyboardType="number-pad"
                       editable={Boolean(startedAt) && !isCompleted}
@@ -908,12 +1100,17 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
                     />
                   </View>
                   <View style={styles.actualField}>
-                    <ThemedText style={styles.targetLabel}>Repeticiones realizadas</ThemedText>
+                    <ThemedText style={styles.targetLabel}>
+                      Repeticiones realizadas
+                    </ThemedText>
                     <TextInput
                       style={styles.actualInput}
                       value={exercise.repeticionesRealizadas}
                       onChangeText={(value) => {
-                        if (/^\d{0,3}$/.test(value)) updateSessionExercise(index, { repeticionesRealizadas: value });
+                        if (/^\d{0,3}$/.test(value))
+                          updateSessionExercise(index, {
+                            repeticionesRealizadas: value,
+                          });
                       }}
                       keyboardType="number-pad"
                       editable={Boolean(startedAt) && !isCompleted}
@@ -930,9 +1127,13 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
               <View style={styles.restHeading}>
                 <View>
                   <ThemedText style={styles.restTitle}>Descanso</ThemedText>
-                  <ThemedText style={styles.restSubtitle}>Configura tu pausa entre ejercicios</ThemedText>
+                  <ThemedText style={styles.restSubtitle}>
+                    Configura tu pausa entre ejercicios
+                  </ThemedText>
                 </View>
-                <ThemedText style={styles.restClock}>{formatDuration(restRemaining)}</ThemedText>
+                <ThemedText style={styles.restClock}>
+                  {formatDuration(restRemaining)}
+                </ThemedText>
               </View>
               <View style={styles.restControls}>
                 <ThemedText style={styles.restInputLabel}>Segundos</ThemedText>
@@ -959,9 +1160,14 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
                   </Pressable>
                 ) : (
                   <>
-                    <Pressable style={styles.restButton} onPress={() => setIsRestRunning(false)}>
+                    <Pressable
+                      style={styles.restButton}
+                      onPress={() => setIsRestRunning(false)}
+                    >
                       <Ionicons name="pause" size={15} color="#FFFFFF" />
-                      <ThemedText style={styles.restButtonText}>Pausar</ThemedText>
+                      <ThemedText style={styles.restButtonText}>
+                        Pausar
+                      </ThemedText>
                     </Pressable>
                     <Pressable
                       style={styles.restSecondaryButton}
@@ -970,7 +1176,9 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
                         setRestRemaining(0);
                       }}
                     >
-                      <ThemedText style={styles.restButtonText}>Finalizar</ThemedText>
+                      <ThemedText style={styles.restButtonText}>
+                        Finalizar
+                      </ThemedText>
                     </Pressable>
                   </>
                 )}
@@ -978,25 +1186,40 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
             </View>
 
             {validationMessage ? (
-              <ThemedText style={styles.validationMessage}>{validationMessage}</ThemedText>
+              <ThemedText style={styles.validationMessage}>
+                {validationMessage}
+              </ThemedText>
             ) : null}
 
             {startedAt && !isCompleted ? (
               <Pressable
-                style={({ pressed }) => [styles.finishWorkoutButton, pressed && styles.routinePressed]}
+                style={({ pressed }) => [
+                  styles.finishWorkoutButton,
+                  pressed && styles.routinePressed,
+                ]}
                 onPress={handleFinishWorkout}
                 disabled={isSaving}
               >
-                {isSaving ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="checkmark-done" size={19} color="#FFFFFF" />}
+                {isSaving ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="checkmark-done" size={19} color="#FFFFFF" />
+                )}
                 <ThemedText style={styles.startWorkoutText}>
-                  {isSaving ? "Guardando entrenamiento..." : "Finalizar entrenamiento"}
+                  {isSaving
+                    ? "Guardando entrenamiento..."
+                    : "Finalizar entrenamiento"}
                 </ThemedText>
               </Pressable>
             ) : null}
 
             {isCompleted ? (
               <View style={styles.completionNotice}>
-                <Ionicons name="checkmark-circle" size={22} color={SportGymColors.primary} />
+                <Ionicons
+                  name="checkmark-circle"
+                  size={22}
+                  color={SportGymColors.primary}
+                />
                 <ThemedText style={styles.completionText}>
                   Sesión completada · {formatDuration(elapsedSeconds)}
                 </ThemedText>
@@ -1005,10 +1228,34 @@ function WorkoutSessionScreen({ day, exercises, user, onBack }: WorkoutSessionSc
           </ScrollView>
 
           <View style={styles.bottomNavigation}>
-            <BottomTab label="Inicio" icon="home-outline" activeIcon="home" active={false} onPress={() => router.push("/(tabs)")} />
-            <BottomTab label="Rutina" icon="barbell-outline" activeIcon="barbell" active onPress={onBack} />
-            <BottomTab label="Tienda" icon="flask-outline" activeIcon="flask" active={false} onPress={() => router.push("/(tabs)/store")} />
-            <BottomTab label="Nutrición" icon="nutrition-outline" activeIcon="nutrition" active={false} onPress={() => router.push("/(tabs)/nutrition")} />
+            <BottomTab
+              label="Inicio"
+              icon="home-outline"
+              activeIcon="home"
+              active={false}
+              onPress={() => router.push("/(tabs)")}
+            />
+            <BottomTab
+              label="Rutina"
+              icon="barbell-outline"
+              activeIcon="barbell"
+              active
+              onPress={onBack}
+            />
+            <BottomTab
+              label="Tienda"
+              icon="flask-outline"
+              activeIcon="flask"
+              active={false}
+              onPress={() => router.push("/(tabs)/store")}
+            />
+            <BottomTab
+              label="Nutrición"
+              icon="nutrition-outline"
+              activeIcon="nutrition"
+              active={false}
+              onPress={() => router.push("/(tabs)/nutrition")}
+            />
           </View>
         </View>
       </SafeAreaView>
@@ -1845,19 +2092,99 @@ const styles = StyleSheet.create({
   },
 
   savedExercisesList: {
-    gap: 9,
+    gap: 11,
   },
 
-  savedExerciseRow: {
-    minHeight: 70,
+  savedExerciseCard: {
+    minHeight: 112,
+    justifyContent: "center",
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#343A32",
+    borderRadius: 10,
+    backgroundColor: "#171A17",
+  },
+
+  savedExerciseMain: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 11,
-    paddingVertical: 9,
+  },
+
+  savedExerciseIcon: {
+    width: 43,
+    height: 43,
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#303330",
-    borderRadius: 10,
-    backgroundColor: "#171917",
+    borderColor: "#40543B",
+    borderRadius: 9,
+    backgroundColor: "#243321",
+  },
+
+  savedExerciseTitleBlock: {
+    flex: 1,
+    marginHorizontal: 11,
+  },
+
+  savedExerciseName: {
+    color: "#F2F4EF",
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "800",
+  },
+
+  favoriteBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 5,
+  },
+
+  favoriteBadgeText: {
+    color: "#D98984",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+
+  removeFavoriteButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#4A3735",
+    borderRadius: 20,
+    backgroundColor: "#2C211F",
+  },
+
+  savedExerciseTags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginLeft: 54,
+    marginTop: 10,
+  },
+
+  savedExerciseTag: {
+    maxWidth: "100%",
+    minHeight: 25,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "#363D34",
+    borderRadius: 6,
+    backgroundColor: "#202420",
+  },
+
+  savedExerciseTagText: {
+    flexShrink: 1,
+    color: "#B8C2B2",
+    fontSize: 10,
+    fontWeight: "600",
   },
 
   savedState: {
