@@ -3,6 +3,7 @@ import { createContext, ReactNode, useContext, useState } from "react";
 export type FitnessLevel = "principiante" | "intermedio" | "avanzado";
 
 export type User = {
+  clientId?: string;
   firstName: string;
   lastName: string;
   username: string;

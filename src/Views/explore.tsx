@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -15,7 +16,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import exerciseData from '../../assets/exercises/exercises.json';
+import {
+  hasFavoriteExercise,
+  removeFavoriteExercise,
+  saveExerciseToRoutine,
+  saveFavoriteExercise,
+} from '../../assets/database/firebase';
 import { SportGymColors } from '../constants/theme';
+import { useAuth } from '../contexts/AuthContext';
 
 type Exercise = {
   id: string;
@@ -144,6 +152,12 @@ const focusOptions = [
   { id: 'warm_up', label: 'Calentamiento', image: '' },
   { id: 'stretching', label: 'Estiramiento', image: '' },
 ];
+
+const routineDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const todayDay = new Intl.DateTimeFormat('es-MX', { weekday: 'long' }).format(new Date());
+const defaultRoutineDay = routineDays.find(
+  (day) => day.toLowerCase() === todayDay.toLowerCase(),
+) || 'Lunes';
 
 const equipmentNames: Record<string, string> = {
   ab_crunch_machine: 'Máquina abdominal',
@@ -545,6 +559,90 @@ type ExerciseDetailsProps = {
 };
 
 function ExerciseDetails({ exercise, onClose }: ExerciseDetailsProps) {
+  const { user } = useAuth();
+  const [selectedDay, setSelectedDay] = useState(defaultRoutineDay);
+  const [isChoosingDay, setIsChoosingDay] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isSavingRoutine, setIsSavingRoutine] = useState(false);
+  const [isSavingFavorite, setIsSavingFavorite] = useState(false);
+
+  useEffect(() => {
+    let isCurrent = true;
+    setIsFavorite(false);
+
+    if (!exercise || !user?.clientId) return () => {
+      isCurrent = false;
+    };
+
+    hasFavoriteExercise(user.clientId, exercise.id)
+      .then((favorite) => {
+        if (isCurrent) setIsFavorite(favorite);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [exercise?.id, user?.clientId]);
+
+  const getSaveContext = () => {
+    if (!user?.clientId) {
+      Alert.alert('Inicia sesión', 'Necesitas iniciar sesión como cliente para guardar ejercicios.');
+      return null;
+    }
+
+    return {
+      clientId: user.clientId,
+      clientUsername: user.username,
+      clientName: `${user.firstName} ${user.lastName}`.trim(),
+      exercise: {
+        id: exercise!.id,
+        name: exercise!.name_es,
+        bodyPart: getBodyPartName(exercise!.body_part),
+        equipment: getEquipmentName(exercise!.equipment || 'bodyweight'),
+        category: exercise!.category,
+      },
+    };
+  };
+
+  const handleSaveRoutine = async () => {
+    if (!exercise || isSavingRoutine) return;
+    const saveContext = getSaveContext();
+    if (!saveContext) return;
+
+    setIsSavingRoutine(true);
+    try {
+      await saveExerciseToRoutine({ ...saveContext, day: selectedDay });
+      setIsChoosingDay(false);
+      Alert.alert('Agregado a Mi rutina', `${exercise.name_es} se guardó para el ${selectedDay.toLowerCase()}.`);
+    } catch {
+      Alert.alert('No se pudo guardar', 'Inténtalo de nuevo en unos momentos.');
+    } finally {
+      setIsSavingRoutine(false);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!exercise || isSavingFavorite) return;
+    const saveContext = getSaveContext();
+    if (!saveContext) return;
+
+    setIsSavingFavorite(true);
+    try {
+      if (isFavorite) {
+        await removeFavoriteExercise(saveContext.clientId, exercise.id);
+        setIsFavorite(false);
+      } else {
+        await saveFavoriteExercise(saveContext);
+        setIsFavorite(true);
+      }
+    } catch {
+      Alert.alert('No se pudo actualizar', 'Inténtalo de nuevo en unos momentos.');
+    } finally {
+      setIsSavingFavorite(false);
+    }
+  };
+
   return (
     <Modal
       visible={exercise !== null}
@@ -573,6 +671,61 @@ function ExerciseDetails({ exercise, onClose }: ExerciseDetailsProps) {
                 <Text style={styles.detailsTag}>{getEquipmentName(exercise.equipment || 'bodyweight')}</Text>
               </View>
               {exercise.description_es ? <Text style={styles.detailsDescription}>{exercise.description_es}</Text> : null}
+              <View style={styles.exerciseActions}>
+                <Pressable
+                  style={({ pressed }) => [styles.routineAction, pressed && styles.cardPressed]}
+                  onPress={() => setIsChoosingDay((visible) => !visible)}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="add-circle-outline" size={19} color="#FFFFFF" />
+                  <Text style={styles.routineActionText}>Agregar a mi rutina</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.favoriteAction, pressed && styles.cardPressed]}
+                  onPress={handleToggleFavorite}
+                  disabled={isSavingFavorite}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isFavorite, disabled: isSavingFavorite }}
+                >
+                  <Ionicons
+                    name={isFavorite ? 'heart' : 'heart-outline'}
+                    size={20}
+                    color={isFavorite ? '#F07A79' : '#FFFFFF'}
+                  />
+                  <Text style={styles.favoriteActionText}>
+                    {isSavingFavorite ? 'Guardando...' : isFavorite ? 'En favoritos' : 'Agregar como favorito'}
+                  </Text>
+                </Pressable>
+              </View>
+              {isChoosingDay ? (
+                <View style={styles.dayPicker}>
+                  <Text style={styles.dayPickerTitle}>¿Qué día entrenarás?</Text>
+                  <View style={styles.dayOptions}>
+                    {routineDays.map((day) => (
+                      <Pressable
+                        key={day}
+                        style={[styles.dayOption, selectedDay === day && styles.dayOptionSelected]}
+                        onPress={() => setSelectedDay(day)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: selectedDay === day }}
+                      >
+                        <Text style={[styles.dayOptionText, selectedDay === day && styles.dayOptionTextSelected]}>
+                          {day}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.confirmRoutineButton, pressed && styles.cardPressed]}
+                    onPress={handleSaveRoutine}
+                    disabled={isSavingRoutine}
+                  >
+                    <Text style={styles.confirmRoutineText}>
+                      {isSavingRoutine ? 'Guardando...' : `Guardar para ${selectedDay.toLowerCase()}`}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
               <Text style={styles.instructionsTitle}>Ejecución</Text>
               {(exercise.instructions_es || []).map((instruction, index) => (
                 <View key={`${exercise.id}-${index}`} style={styles.instructionRow}>
@@ -925,6 +1078,104 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     marginTop: 15,
+  },
+  exerciseActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 9,
+    marginTop: 17,
+  },
+  routineAction: {
+    minHeight: 42,
+    flexGrow: 1,
+    flexBasis: 150,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: SportGymColors.primary,
+  },
+  routineActionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  favoriteAction: {
+    minHeight: 42,
+    flexGrow: 1,
+    flexBasis: 150,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#464B45',
+    borderRadius: 8,
+    backgroundColor: '#202320',
+  },
+  favoriteActionText: {
+    color: '#F0F2EE',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dayPicker: {
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#343934',
+    borderRadius: 9,
+    backgroundColor: '#191C19',
+  },
+  dayPickerTitle: {
+    color: '#EEF1EA',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 10,
+  },
+  dayOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  dayOption: {
+    minWidth: 72,
+    minHeight: 33,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 9,
+    borderWidth: 1,
+    borderColor: '#414640',
+    borderRadius: 7,
+    backgroundColor: '#232723',
+  },
+  dayOptionSelected: {
+    borderColor: SportGymColors.primary,
+    backgroundColor: '#315D29',
+  },
+  dayOptionText: {
+    color: '#C9CEC6',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  dayOptionTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  confirmRoutineButton: {
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 11,
+    borderRadius: 8,
+    backgroundColor: SportGymColors.primary,
+  },
+  confirmRoutineText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
   instructionsTitle: {
     color: '#F1F2EF',

@@ -11,14 +11,18 @@ import { getReactNativePersistence } from "firebase/auth";
 
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  addDoc,
     collection,
+  deleteDoc,
     doc,
+  getDoc,
     getDocs,
     getFirestore,
     limit,
     query,
     runTransaction,
     serverTimestamp,
+    setDoc,
     updateDoc,
     where,
     type DocumentData,
@@ -176,7 +180,7 @@ export function getClientMembership(client: ClientRecord) {
 export async function verifyClientCredentials(
   username: string,
   password: string,
-) {
+): Promise<DocumentData & { documentId: string }> {
   const normalizedUsername = username.trim().toLowerCase();
 
   if (!normalizedUsername || !password) {
@@ -195,7 +199,178 @@ export async function verifyClientCredentials(
     throw new Error("invalid-credentials");
   }
 
-  return clientsSnapshot.docs[0].data();
+  const clientDocument = clientsSnapshot.docs[0];
+  return { ...clientDocument.data(), documentId: clientDocument.id };
+}
+
+type RoutineExerciseInput = {
+  clientId: string;
+  clientUsername: string;
+  clientName: string;
+  exercise: {
+    id: string;
+    name: string;
+    bodyPart: string;
+    equipment: string;
+    category: string;
+  };
+  day: string;
+};
+
+type FavoriteExerciseInput = Omit<RoutineExerciseInput, "day">;
+
+export type SavedRoutineExercise = {
+  id: string;
+  ejercicioId: string;
+  ejercicioNombre: string;
+  dia: string;
+  equipo: string;
+  grupoMuscular: string;
+  categoria: string;
+  seriesAsignadas?: number;
+  repeticionesAsignadas?: number;
+};
+
+export type SavedFavoriteExercise = {
+  id: string;
+  ejercicioId: string;
+  ejercicioNombre: string;
+  equipo: string;
+  grupoMuscular: string;
+  categoria: string;
+};
+
+const getRoutineDocumentId = (clientId: string, exerciseId: string, day: string) =>
+  `${clientId}_${exerciseId}_${day
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")}`;
+
+export async function saveExerciseToRoutine(input: RoutineExerciseInput) {
+  const routineId = getRoutineDocumentId(input.clientId, input.exercise.id, input.day);
+  await setDoc(
+    doc(db, "rutinas", routineId),
+    {
+      clienteId: input.clientId,
+      clienteUsuario: input.clientUsername,
+      clienteNombre: input.clientName,
+      ejercicioId: input.exercise.id,
+      ejercicioNombre: input.exercise.name,
+      dia: input.day,
+      equipo: input.exercise.equipment,
+      grupoMuscular: input.exercise.bodyPart,
+      categoria: input.exercise.category,
+      seriesAsignadas: 3,
+      repeticionesAsignadas: 12,
+      fechaActualizacion: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  return routineId;
+}
+
+export async function getClientRoutineExercises(clientId: string) {
+  const routineQuery = query(
+    collection(db, "rutinas"),
+    where("clienteId", "==", clientId),
+  );
+  const snapshot = await getDocs(routineQuery);
+
+  return snapshot.docs.map((routineDocument) => ({
+    id: routineDocument.id,
+    ...routineDocument.data(),
+  })) as SavedRoutineExercise[];
+}
+
+export async function updateRoutineExerciseTargets(
+  routineId: string,
+  series: number,
+  repetitions: number,
+) {
+  await setDoc(
+    doc(db, "rutinas", routineId),
+    {
+      seriesAsignadas: series,
+      repeticionesAsignadas: repetitions,
+      fechaActualizacion: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+const getFavoriteDocument = (clientId: string, exerciseId: string) =>
+  doc(db, "favoritos", `${clientId}_${exerciseId}`);
+
+export async function hasFavoriteExercise(clientId: string, exerciseId: string) {
+  const favoriteDocument = await getDoc(getFavoriteDocument(clientId, exerciseId));
+  return favoriteDocument.exists();
+}
+
+export async function saveFavoriteExercise(input: FavoriteExerciseInput) {
+  await setDoc(getFavoriteDocument(input.clientId, input.exercise.id), {
+    clienteId: input.clientId,
+    clienteUsuario: input.clientUsername,
+    clienteNombre: input.clientName,
+    ejercicioId: input.exercise.id,
+    ejercicioNombre: input.exercise.name,
+    equipo: input.exercise.equipment,
+    grupoMuscular: input.exercise.bodyPart,
+    categoria: input.exercise.category,
+    fechaCreacion: serverTimestamp(),
+  });
+}
+
+export async function removeFavoriteExercise(clientId: string, exerciseId: string) {
+  await deleteDoc(getFavoriteDocument(clientId, exerciseId));
+}
+
+export async function getClientFavoriteExercises(clientId: string) {
+  const favoritesQuery = query(
+    collection(db, "favoritos"),
+    where("clienteId", "==", clientId),
+  );
+  const snapshot = await getDocs(favoritesQuery);
+
+  return snapshot.docs.map((favoriteDocument) => ({
+    id: favoriteDocument.id,
+    ...favoriteDocument.data(),
+  })) as SavedFavoriteExercise[];
+}
+
+export type CompletedWorkoutExercise = {
+  ejercicioId: string;
+  ejercicioNombre: string;
+  seriesAsignadas: number;
+  repeticionesAsignadas: number;
+  seriesRealizadas: number;
+  repeticionesRealizadas: number;
+};
+
+export async function saveCompletedWorkout(input: {
+  clientId: string;
+  clientUsername: string;
+  clientName: string;
+  day: string;
+  startedAt: Date;
+  durationSeconds: number;
+  exercises: CompletedWorkoutExercise[];
+}) {
+  const workoutDocument = await addDoc(collection(db, "entrenamientos"), {
+    clienteId: input.clientId,
+    clienteUsuario: input.clientUsername,
+    clienteNombre: input.clientName,
+    dia: input.day,
+    estado: "completado",
+    fechaInicio: input.startedAt,
+    fechaFinalizacion: serverTimestamp(),
+    duracionSegundos: input.durationSeconds,
+    duracionMinutos: Math.max(1, Math.ceil(input.durationSeconds / 60)),
+    totalEjercicios: input.exercises.length,
+    ejercicios: input.exercises,
+  });
+
+  return workoutDocument.id;
 }
 
 export async function updateClientProfile(

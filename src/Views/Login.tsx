@@ -46,6 +46,7 @@ export default function LoginScreen() {
         userData.usuario || userData.username || username;
 
       setUser({
+        clientId: userData.documentId,
         firstName: userData.nombre || userData.firstName || '',
         lastName: userData.apellido || userData.lastName || '',
         username: clientUsername,
