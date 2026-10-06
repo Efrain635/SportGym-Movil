@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, ReactNode, useContext, useState } from "react";
+
+export type FitnessLevel = "principiante" | "intermedio" | "avanzado";
 
 export type User = {
   firstName: string;
@@ -7,6 +9,14 @@ export type User = {
   email: string;
   phone: string | null;
   membership: MembershipInfo | null;
+  goal?: string;
+  level?: FitnessLevel;
+  gymMachines?: string[];
+  daysPerWeek?: number;
+  restrictions?: string[];
+  weight?: number | null;
+  height?: number | null;
+  age?: number | null;
 };
 
 export type MembershipInfo = {
@@ -35,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

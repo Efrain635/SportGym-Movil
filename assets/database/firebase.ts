@@ -1,26 +1,29 @@
 import { initializeApp } from "firebase/app";
 
 import {
-  createUserWithEmailAndPassword,
-  deleteUser,
-  getAuth,
-  initializeAuth,
+    createUserWithEmailAndPassword,
+    deleteUser,
+    getAuth,
+    initializeAuth,
 } from "firebase/auth";
 // @ts-expect-error Firebase's React Native runtime exports this, but its web-facing types do not.
 import { getReactNativePersistence } from "firebase/auth";
 
-import {
-  collection,
-  doc,
-  getDocs,
-  getFirestore,
-  limit,
-  query,
-  runTransaction,
-  serverTimestamp,
-  where,
-} from "firebase/firestore";
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import {
+    collection,
+    doc,
+    getDocs,
+    getFirestore,
+    limit,
+    query,
+    runTransaction,
+    serverTimestamp,
+    updateDoc,
+    where,
+    type DocumentData,
+    type QueryDocumentSnapshot,
+} from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD7dcJDrGRTH743AoyYnMvTODAMPVRt5Yg",
@@ -172,7 +175,7 @@ export function getClientMembership(client: ClientRecord) {
 
 export async function verifyClientCredentials(
   username: string,
-  password: string
+  password: string,
 ) {
   const normalizedUsername = username.trim().toLowerCase();
 
@@ -193,6 +196,106 @@ export async function verifyClientCredentials(
   }
 
   return clientsSnapshot.docs[0].data();
+}
+
+export async function updateClientProfile(
+  username: string,
+  profile: {
+    goal?: string;
+    level?: "principiante" | "intermedio" | "avanzado";
+    daysPerWeek?: number;
+    gymMachines?: string[];
+    restrictions?: string[];
+  },
+) {
+  const normalizedUsername = username.trim().toLowerCase();
+
+  if (!normalizedUsername) {
+    throw new Error("missing-username");
+  }
+
+  const identifierCandidates = Array.from(
+    new Set([
+      normalizedUsername,
+      normalizedUsername.replace(/@.*$/, ""),
+      normalizedUsername.replace(/\.[^/.]+$/, ""),
+    ]),
+  ).filter(Boolean);
+
+  let clientDoc: QueryDocumentSnapshot<DocumentData> | null = null;
+
+  for (const candidate of identifierCandidates) {
+    const queryOptions = [
+      query(
+        collection(db, "clientes"),
+        where("usuario", "==", candidate),
+        limit(1),
+      ),
+      query(
+        collection(db, "clientes"),
+        where("username", "==", candidate),
+        limit(1),
+      ),
+      query(
+        collection(db, "clientes"),
+        where("email", "==", candidate),
+        limit(1),
+      ),
+      query(
+        collection(db, "clientes"),
+        where("correo", "==", candidate),
+        limit(1),
+      ),
+    ];
+
+    for (const queryDefinition of queryOptions) {
+      const snapshot = await getDocs(queryDefinition);
+      if (!snapshot.empty) {
+        clientDoc = snapshot.docs[0];
+        break;
+      }
+    }
+
+    if (clientDoc) {
+      break;
+    }
+  }
+
+  if (!clientDoc) {
+    throw new Error("client-not-found");
+  }
+
+  const clientData = clientDoc.data();
+  const nextMachines =
+    profile.gymMachines ??
+    (Array.isArray(clientData.maquinasDisponibles)
+      ? clientData.maquinasDisponibles
+      : []);
+  const nextRestrictions =
+    profile.restrictions ??
+    (Array.isArray(clientData.restricciones) ? clientData.restricciones : []);
+
+  await updateDoc(clientDoc.ref, {
+    objetivo:
+      profile.goal ??
+      (typeof clientData.objetivo === "string"
+        ? clientData.objetivo
+        : "ganar masa muscular"),
+    nivel:
+      profile.level ??
+      (typeof clientData.nivel === "string"
+        ? clientData.nivel
+        : "principiante"),
+    diasEntrenamiento:
+      profile.daysPerWeek ??
+      (typeof clientData.diasEntrenamiento === "number"
+        ? clientData.diasEntrenamiento
+        : 4),
+    maquinasDisponibles: nextMachines,
+    maquinas: nextMachines,
+    restricciones: nextRestrictions,
+    fechaUltimoCambio: serverTimestamp(),
+  });
 }
 
 type RegisterUserInput = {

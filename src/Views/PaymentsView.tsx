@@ -1,124 +1,102 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import {
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ThemedText } from '../components/themed-text';
-import { SportGymColors } from '../constants/theme';
+import { ThemedText } from "../components/themed-text";
+import { SportGymColors } from "../constants/theme";
 
-type Filter = 'Todos' | 'Pagados' | 'Pendientes';
+type Filter = "Todos" | "Pagados" | "Pendientes";
 
-type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';
+type TabName = "Inicio" | "Rutina" | "Tienda" | "Nutrición";
 
 type Payment = {
   id: number;
   date: string;
   description: string;
   amount: string;
-  status: 'Pagado' | 'Pendiente';
+  status: "Pagado" | "Pendiente";
 };
 
 const payments: Payment[] = [
   {
     id: 1,
-    date: '25 Jun 2026',
-    description: 'Membresía Premium',
-    amount: 'C$ 1,500.00',
-    status: 'Pagado',
+    date: "25 Jun 2026",
+    description: "Membresía Premium",
+    amount: "C$ 1,500.00",
+    status: "Pagado",
   },
   {
     id: 2,
-    date: '25 May 2026',
-    description: 'Membresía Premium',
-    amount: 'C$ 1,500.00',
-    status: 'Pagado',
+    date: "25 May 2026",
+    description: "Membresía Premium",
+    amount: "C$ 1,500.00",
+    status: "Pagado",
   },
   {
     id: 3,
-    date: '25 Abr 2026',
-    description: 'Membresía Premium',
-    amount: 'C$ 1,500.00',
-    status: 'Pagado',
+    date: "25 Abr 2026",
+    description: "Membresía Premium",
+    amount: "C$ 1,500.00",
+    status: "Pagado",
   },
   {
     id: 4,
-    date: '15 Jul 2026',
-    description: 'Membresía Premium',
-    amount: 'C$ 1,500.00',
-    status: 'Pendiente',
+    date: "15 Jul 2026",
+    description: "Membresía Premium",
+    amount: "C$ 1,500.00",
+    status: "Pendiente",
   },
 ];
 
 export default function PaymentsView() {
-  const [activeFilter, setActiveFilter] =
-    useState<Filter>('Todos');
-  const [activeTab, setActiveTab] = useState<TabName>('Inicio');
+  const [activeFilter, setActiveFilter] = useState<Filter>("Todos");
+  const [activeTab, setActiveTab] = useState<TabName>("Inicio");
 
   const handleTabPress = (tab: TabName) => {
     setActiveTab(tab);
 
     switch (tab) {
-      case 'Inicio':
-        router.push('/(tabs)');
+      case "Inicio":
+        router.push("/(tabs)");
         break;
-      case 'Rutina':
-        router.push('/(tabs)/routine');
+      case "Rutina":
+        router.push("/(tabs)/routine");
         break;
-      case 'Tienda':
-        router.push('/(tabs)/store');
+      case "Tienda":
+        router.push("/(tabs)/store");
         break;
-      case 'Nutrición':
-        router.push('/(tabs)/nutrition');
+      case "Nutrición":
+        router.push("/(tabs)/nutrition");
         break;
     }
   };
 
   const filteredPayments = payments.filter((payment) => {
-    if (activeFilter === 'Todos') {
+    if (activeFilter === "Todos") {
       return true;
     }
 
-    return payment.status ===
-      (activeFilter === 'Pagados'
-        ? 'Pagado'
-        : 'Pendiente');
+    return (
+      payment.status === (activeFilter === "Pagados" ? "Pagado" : "Pendiente")
+    );
   });
 
   return (
     <View style={styles.screen}>
-      <SafeAreaView
-        style={styles.safeArea}
-        edges={['top', 'bottom']}
-      >
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
         <View style={styles.card}>
-
           {/* ========================================= */}
           {/* HEADER */}
           {/* ========================================= */}
 
           <View style={styles.header}>
-            <Pressable
-              style={styles.backButton}
-              onPress={() => {
-                console.log('Volver');
-              }}
-            >
-              <Ionicons
-                name="arrow-back"
-                size={25}
-                color="#D8D8D8"
-              />
+            <Pressable style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={25} color="#D8D8D8" />
             </Pressable>
 
-            <ThemedText style={styles.headerTitle}>
-              Mis pagos
-            </ThemedText>
+            <ThemedText style={styles.headerTitle}>Mis pagos</ThemedText>
 
             {/* Espacio para centrar el título */}
             <View style={styles.headerRightSpace} />
@@ -129,27 +107,23 @@ export default function PaymentsView() {
           {/* ========================================= */}
 
           <View style={styles.filtersContainer}>
-
             <FilterButton
               title="Todos"
-              active={activeFilter === 'Todos'}
-              onPress={() => setActiveFilter('Todos')}
+              active={activeFilter === "Todos"}
+              onPress={() => setActiveFilter("Todos")}
             />
 
             <FilterButton
               title="Pagados"
-              active={activeFilter === 'Pagados'}
-              onPress={() => setActiveFilter('Pagados')}
+              active={activeFilter === "Pagados"}
+              onPress={() => setActiveFilter("Pagados")}
             />
 
             <FilterButton
               title="Pendientes"
-              active={activeFilter === 'Pendientes'}
-              onPress={() =>
-                setActiveFilter('Pendientes')
-              }
+              active={activeFilter === "Pendientes"}
+              onPress={() => setActiveFilter("Pendientes")}
             />
-
           </View>
 
           {/* ========================================= */}
@@ -194,19 +168,12 @@ export default function PaymentsView() {
             showsVerticalScrollIndicator={false}
           >
             {filteredPayments.map((payment) => (
-              <PaymentCard
-                key={payment.id}
-                payment={payment}
-              />
+              <PaymentCard key={payment.id} payment={payment} />
             ))}
 
             {filteredPayments.length === 0 && (
               <View style={styles.emptyContainer}>
-                <Ionicons
-                  name="receipt-outline"
-                  size={40}
-                  color="#555555"
-                />
+                <Ionicons name="receipt-outline" size={40} color="#555555" />
 
                 <ThemedText style={styles.emptyText}>
                   No hay pagos para mostrar
@@ -223,47 +190,43 @@ export default function PaymentsView() {
           {/* ========================================= */}
 
           <View style={styles.bottomNavigation}>
-
             <BottomTab
               label="Inicio"
               icon="home-outline"
               activeIcon="home"
-              active={activeTab === 'Inicio'}
-              onPress={() => handleTabPress('Inicio')}
+              active={activeTab === "Inicio"}
+              onPress={() => handleTabPress("Inicio")}
             />
 
             <BottomTab
               label="Rutina"
               icon="barbell-outline"
               activeIcon="barbell"
-              active={activeTab === 'Rutina'}
-              onPress={() => handleTabPress('Rutina')}
+              active={activeTab === "Rutina"}
+              onPress={() => handleTabPress("Rutina")}
             />
 
             <BottomTab
               label="Tienda"
               icon="flask-outline"
               activeIcon="flask"
-              active={activeTab === 'Tienda'}
-              onPress={() => handleTabPress('Tienda')}
+              active={activeTab === "Tienda"}
+              onPress={() => handleTabPress("Tienda")}
             />
 
             <BottomTab
               label="Nutrición"
               icon="nutrition-outline"
               activeIcon="nutrition"
-              active={activeTab === 'Nutrición'}
-              onPress={() => handleTabPress('Nutrición')}
+              active={activeTab === "Nutrición"}
+              onPress={() => handleTabPress("Nutrición")}
             />
-
           </View>
-
         </View>
       </SafeAreaView>
     </View>
   );
 }
-
 
 /* ===================================================== */
 /* FILTRO */
@@ -275,11 +238,7 @@ type FilterButtonProps = {
   onPress: () => void;
 };
 
-function FilterButton({
-  title,
-  active,
-  onPress,
-}: FilterButtonProps) {
+function FilterButton({ title, active, onPress }: FilterButtonProps) {
   return (
     <Pressable
       style={({ pressed }) => [
@@ -290,17 +249,13 @@ function FilterButton({
       onPress={onPress}
     >
       <ThemedText
-        style={[
-          styles.filterText,
-          active && styles.filterTextActive,
-        ]}
+        style={[styles.filterText, active && styles.filterTextActive]}
       >
         {title}
       </ThemedText>
     </Pressable>
   );
 }
-
 
 /* ===================================================== */
 /* TARJETA DE PAGO */
@@ -310,9 +265,7 @@ type PaymentCardProps = {
   payment: Payment;
 };
 
-function PaymentCard({
-  payment,
-}: PaymentCardProps) {
+function PaymentCard({ payment }: PaymentCardProps) {
   return (
     <Pressable
       style={({ pressed }) => [
@@ -320,7 +273,7 @@ function PaymentCard({
         pressed && styles.paymentPressed,
       ]}
       onPress={() => {
-        console.log('Pago seleccionado:', payment.id);
+        console.log("Pago seleccionado:", payment.id);
       }}
     >
       {/* ICONO Y FECHA */}
@@ -329,17 +282,11 @@ function PaymentCard({
           <Ionicons
             name="card-outline"
             size={22}
-            color={
-              payment.status === 'Pagado'
-                ? '#59B83C'
-                : '#D99A2B'
-            }
+            color={payment.status === "Pagado" ? "#59B83C" : "#D99A2B"}
           />
         </View>
 
-        <ThemedText style={styles.paymentDate}>
-          {payment.date}
-        </ThemedText>
+        <ThemedText style={styles.paymentDate}>{payment.date}</ThemedText>
       </View>
 
       {/* DESCRIPCIÓN */}
@@ -349,22 +296,24 @@ function PaymentCard({
 
       {/* MONTO Y ESTADO */}
       <View style={styles.paymentBottomRow}>
-        <ThemedText style={styles.amount}>
-          {payment.amount}
-        </ThemedText>
+        <ThemedText style={styles.amount}>{payment.amount}</ThemedText>
 
-        <View style={[
-          styles.statusBadge,
-          payment.status === 'Pagado'
-            ? styles.statusPaid
-            : styles.statusPending
-        ]}>
-          <ThemedText style={[
-            styles.statusText,
-            payment.status === 'Pagado'
-              ? styles.statusTextPaid
-              : styles.statusTextPending
-          ]}>
+        <View
+          style={[
+            styles.statusBadge,
+            payment.status === "Pagado"
+              ? styles.statusPaid
+              : styles.statusPending,
+          ]}
+        >
+          <ThemedText
+            style={[
+              styles.statusText,
+              payment.status === "Pagado"
+                ? styles.statusTextPaid
+                : styles.statusTextPending,
+            ]}
+          >
             {payment.status}
           </ThemedText>
         </View>
@@ -372,7 +321,6 @@ function PaymentCard({
     </Pressable>
   );
 }
-
 
 /* ===================================================== */
 /* TAB INFERIOR */
@@ -395,27 +343,17 @@ function BottomTab({
 }: BottomTabProps) {
   return (
     <Pressable
-      style={({ pressed }) => [
-        styles.bottomTab,
-        pressed && styles.tabPressed,
-      ]}
+      style={({ pressed }) => [styles.bottomTab, pressed && styles.tabPressed]}
       onPress={onPress}
     >
       <Ionicons
         name={active ? activeIcon : icon}
         size={23}
-        color={
-          active
-            ? SportGymColors.primary
-            : '#929292'
-        }
+        color={active ? SportGymColors.primary : "#929292"}
       />
 
       <ThemedText
-        style={[
-          styles.bottomTabLabel,
-          active && styles.bottomTabLabelActive,
-        ]}
+        style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}
       >
         {label}
       </ThemedText>
@@ -423,20 +361,18 @@ function BottomTab({
   );
 }
 
-
 /* ===================================================== */
 /* ESTILOS */
 /* ===================================================== */
 
 const styles = StyleSheet.create({
-
   // ===================================================
   // PANTALLA
   // ===================================================
 
   screen: {
     flex: 1,
-    backgroundColor: '#090A0A',
+    backgroundColor: "#090A0A",
   },
 
   safeArea: {
@@ -450,13 +386,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
 
     borderWidth: 2,
-    borderColor: '#4A4A4A',
+    borderColor: "#4A4A4A",
 
     borderRadius: 24,
 
-    backgroundColor: '#0B0C0C',
+    backgroundColor: "#0B0C0C",
 
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 
   // ===================================================
@@ -466,10 +402,10 @@ const styles = StyleSheet.create({
   header: {
     height: 64,
 
-    flexDirection: 'row',
+    flexDirection: "row",
 
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: "center",
+    justifyContent: "space-between",
 
     paddingHorizontal: 17,
   },
@@ -478,18 +414,18 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
 
-    alignItems: 'flex-start',
-    justifyContent: 'center',
+    alignItems: "flex-start",
+    justifyContent: "center",
   },
 
   headerTitle: {
-    color: '#F2F2F2',
+    color: "#F2F2F2",
 
     fontSize: 17,
 
-    fontWeight: '800',
+    fontWeight: "800",
 
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   headerRightSpace: {
@@ -503,9 +439,9 @@ const styles = StyleSheet.create({
   filtersContainer: {
     height: 54,
 
-    flexDirection: 'row',
+    flexDirection: "row",
 
-    alignItems: 'center',
+    alignItems: "center",
 
     marginHorizontal: 16,
     marginBottom: 12,
@@ -514,7 +450,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 12,
 
-    backgroundColor: '#151616',
+    backgroundColor: "#151616",
   },
 
   filterButton: {
@@ -524,8 +460,8 @@ const styles = StyleSheet.create({
 
     borderRadius: 9,
 
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
 
     marginHorizontal: 2,
   },
@@ -535,17 +471,17 @@ const styles = StyleSheet.create({
   },
 
   filterText: {
-    color: '#B7B7B7',
+    color: "#B7B7B7",
 
     fontSize: 13,
 
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   filterTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
 
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   filterPressed: {
@@ -562,11 +498,11 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    color: '#D8D8D8',
+    color: "#D8D8D8",
 
     fontSize: 14,
 
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   // ===================================================
@@ -579,19 +515,19 @@ const styles = StyleSheet.create({
   },
 
   summaryCard: {
-    backgroundColor: '#1B1C1C',
+    backgroundColor: "#1B1C1C",
 
     borderRadius: 13,
 
     paddingHorizontal: 16,
     paddingVertical: 18,
 
-    flexDirection: 'row',
+    flexDirection: "row",
 
-    alignItems: 'center',
+    alignItems: "center",
 
     borderWidth: 1,
-    borderColor: '#202121',
+    borderColor: "#202121",
   },
 
   summaryIconContainer: {
@@ -600,10 +536,10 @@ const styles = StyleSheet.create({
 
     borderRadius: 12,
 
-    backgroundColor: '#151616',
+    backgroundColor: "#151616",
 
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
 
     marginRight: 16,
   },
@@ -613,21 +549,21 @@ const styles = StyleSheet.create({
   },
 
   summaryLabel: {
-    color: '#AFAFAF',
+    color: "#AFAFAF",
 
     fontSize: 13,
 
-    fontWeight: '500',
+    fontWeight: "500",
 
     marginBottom: 4,
   },
 
   summaryAmount: {
-    color: '#F0F0F0',
+    color: "#F0F0F0",
 
     fontSize: 20,
 
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   // ===================================================
@@ -650,7 +586,7 @@ const styles = StyleSheet.create({
   paymentCard: {
     minHeight: 115,
 
-    backgroundColor: '#1B1C1C',
+    backgroundColor: "#1B1C1C",
 
     borderRadius: 13,
 
@@ -660,13 +596,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
 
     borderWidth: 1,
-    borderColor: '#202121',
+    borderColor: "#202121",
   },
 
   paymentHeader: {
-    flexDirection: 'row',
+    flexDirection: "row",
 
-    alignItems: 'center',
+    alignItems: "center",
 
     marginBottom: 10,
   },
@@ -677,46 +613,46 @@ const styles = StyleSheet.create({
 
     borderRadius: 10,
 
-    backgroundColor: '#151616',
+    backgroundColor: "#151616",
 
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
 
     marginRight: 12,
   },
 
   paymentDate: {
-    color: '#AFAFAF',
+    color: "#AFAFAF",
 
     fontSize: 13,
 
-    fontWeight: '500',
+    fontWeight: "500",
   },
 
   paymentDescription: {
-    color: '#F1F1F1',
+    color: "#F1F1F1",
 
     fontSize: 16,
 
-    fontWeight: '800',
+    fontWeight: "800",
 
     marginBottom: 12,
   },
 
   paymentBottomRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
 
-    alignItems: 'center',
+    alignItems: "center",
 
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
 
   amount: {
-    color: '#F0F0F0',
+    color: "#F0F0F0",
 
     fontSize: 17,
 
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   statusBadge: {
@@ -727,25 +663,25 @@ const styles = StyleSheet.create({
   },
 
   statusPaid: {
-    backgroundColor: '#59B83C',
+    backgroundColor: "#59B83C",
   },
 
   statusPending: {
-    backgroundColor: '#D99A2B',
+    backgroundColor: "#D99A2B",
   },
 
   statusText: {
     fontSize: 12,
 
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   statusTextPaid: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
 
   statusTextPending: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
 
   paymentPressed: {
@@ -763,14 +699,14 @@ const styles = StyleSheet.create({
   // ===================================================
 
   emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
 
     paddingTop: 80,
   },
 
   emptyText: {
-    color: '#777777',
+    color: "#777777",
 
     fontSize: 14,
 
@@ -792,15 +728,15 @@ const styles = StyleSheet.create({
   bottomNavigation: {
     height: 76,
 
-    backgroundColor: '#0C0D0D',
+    backgroundColor: "#0C0D0D",
 
     borderTopWidth: 1,
-    borderTopColor: '#292A2A',
+    borderTopColor: "#292A2A",
 
-    flexDirection: 'row',
+    flexDirection: "row",
 
-    alignItems: 'center',
-    justifyContent: 'space-around',
+    alignItems: "center",
+    justifyContent: "space-around",
 
     paddingHorizontal: 5,
   },
@@ -810,16 +746,16 @@ const styles = StyleSheet.create({
 
     height: 68,
 
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   bottomTabLabel: {
-    color: '#929292',
+    color: "#929292",
 
     fontSize: 11,
 
-    fontWeight: '500',
+    fontWeight: "500",
 
     marginTop: 4,
   },
@@ -827,7 +763,7 @@ const styles = StyleSheet.create({
   bottomTabLabelActive: {
     color: SportGymColors.primary,
 
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   tabPressed: {

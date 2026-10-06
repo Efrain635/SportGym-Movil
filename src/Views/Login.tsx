@@ -58,7 +58,7 @@ export default function LoginScreen() {
         membership: getClientMembership(userData),
       });
 
-      router.replace("/terminos");
+      router.replace('/terminos' as never);
     } catch (error: unknown) {
       const errorCode = (error as { code?: string }).code;
       const errorMessage = (error as { message?: string }).message;
