@@ -54,3 +54,9 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Registro de asistencias
+
+Al escanear el QR del gimnasio, la app crea un registro diario en `asistencias/{clientId_YYYY-MM-DD}` con `nombreUsuario`, `usuario`, `hora` (marca de tiempo de Firestore), `fecha`, `cliente` (ID del documento en `clientes`), `nombreCliente` y `estado` (`presente`). En la misma transacción actualiza `clientes/{clientId}`: `asistencias` contiene fechas únicas en formato `YYYY-MM-DD`, junto con `rachaAsistencia`, `mejorRachaAsistencia` y `totalAsistencias`. Un segundo escaneo el mismo día no duplica el registro.
+
+La PWA debe usar estos mismos campos para consultar o mostrar el historial del cliente y el calendario de perfil.: Chat with Expo users and ask questions.

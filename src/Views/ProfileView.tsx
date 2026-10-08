@@ -133,9 +133,12 @@ const createHeatmapWeeks = () => {
 
 export default function ProfileView() {
   const { user, setUser } = useAuth();
-  const { hasAttendance, total: totalAttendances, weekTotal } = useAttendance(
-    user?.username ?? null,
-  );
+  const {
+    hasAttendance,
+    total: totalAttendances,
+    weekTotal,
+    attendanceError,
+  } = useAttendance(user?.clientId ?? null);
   const [activeTab, setActiveTab] = useState<TabName>('Perfil');
   const [expandedSection, setExpandedSection] =
     useState<ProfileSection | null>('progress');
@@ -568,6 +571,7 @@ export default function ProfileView() {
               <AttendanceCalendar
                 hasAttendance={hasAttendance}
                 totalAttendances={totalAttendances}
+                error={attendanceError}
               />
             )}
 
@@ -730,11 +734,13 @@ function InfoRow({
 type AttendanceCalendarProps = {
   hasAttendance: (date: Date) => boolean;
   totalAttendances: number;
+  error: boolean;
 };
 
 function AttendanceCalendar({
   hasAttendance,
   totalAttendances,
+  error,
 }: AttendanceCalendarProps) {
   const weeks = createHeatmapWeeks();
 
@@ -752,45 +758,53 @@ function AttendanceCalendar({
         <Ionicons name="calendar-outline" size={22} color={SportGymColors.primary} />
       </View>
 
-      <View style={styles.heatmap}>
-        <View style={styles.weekdayLabels}>
-          {weekdayLabels.map((label) => (
-            <ThemedText key={label} style={styles.weekdayLabel}>
-              {label}
-            </ThemedText>
-          ))}
-        </View>
-
-        <View style={styles.weekColumns}>
-          {weeks.map((week, weekIndex) => (
-            <View key={`week-${weekIndex}`} style={styles.weekColumn}>
-              {week.map((date) => {
-                const registered = hasAttendance(date);
-
-                return (
-                  <View
-                    key={date.toISOString()}
-                    style={[
-                      styles.dayCell,
-                      registered ? styles.dayCellRegistered : styles.dayCellEmpty,
-                    ]}
-                    accessibilityLabel={`${date.toLocaleDateString('es-MX')}: ${
-                      registered ? 'asistencia registrada' : 'sin asistencia'
-                    }`}
-                  />
-                );
-              })}
+      {error ? (
+        <ThemedText style={styles.progressText}>
+          No se pudo cargar el calendario de asistencias.
+        </ThemedText>
+      ) : (
+        <>
+          <View style={styles.heatmap}>
+            <View style={styles.weekdayLabels}>
+              {weekdayLabels.map((label) => (
+                <ThemedText key={label} style={styles.weekdayLabel}>
+                  {label}
+                </ThemedText>
+              ))}
             </View>
-          ))}
-        </View>
-      </View>
 
-      <View style={styles.calendarLegend}>
-        <ThemedText style={styles.legendText}>Sin asistencia</ThemedText>
-        <View style={[styles.legendCell, styles.dayCellEmpty]} />
-        <ThemedText style={styles.legendText}>Registrada</ThemedText>
-        <View style={[styles.legendCell, styles.dayCellRegistered]} />
-      </View>
+            <View style={styles.weekColumns}>
+              {weeks.map((week, weekIndex) => (
+                <View key={`week-${weekIndex}`} style={styles.weekColumn}>
+                  {week.map((date) => {
+                    const registered = hasAttendance(date);
+
+                    return (
+                      <View
+                        key={date.toISOString()}
+                        style={[
+                          styles.dayCell,
+                          registered ? styles.dayCellRegistered : styles.dayCellEmpty,
+                        ]}
+                        accessibilityLabel={`${date.toLocaleDateString('es-MX')}: ${
+                          registered ? 'asistencia registrada' : 'sin asistencia'
+                        }`}
+                      />
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.calendarLegend}>
+            <ThemedText style={styles.legendText}>Sin asistencia</ThemedText>
+            <View style={[styles.legendCell, styles.dayCellEmpty]} />
+            <ThemedText style={styles.legendText}>Registrada</ThemedText>
+            <View style={[styles.legendCell, styles.dayCellRegistered]} />
+          </View>
+        </>
+      )}
     </View>
   );
 }

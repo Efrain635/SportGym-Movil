@@ -18,7 +18,7 @@ import {
     doc,
     getDoc,
     getDocs,
-    getFirestore,
+    initializeFirestore,
     limit,
     query,
     runTransaction,
@@ -60,7 +60,10 @@ const createAuth = () => {
 };
 
 export const auth = createAuth();
-export const db = getFirestore(app);
+export const db = initializeFirestore(
+  app,
+  Platform.OS === "web" ? { experimentalForceLongPolling: true } : {},
+);
 
 type ClientRecord = Record<string, unknown>;
 

@@ -1,20 +1,12 @@
 import { useEffect, useState } from 'react';
+import {
+  doc,
+  onSnapshot,
+  runTransaction,
+  serverTimestamp,
+} from 'firebase/firestore';
 
-const attendanceByUser = new Map<string, Set<string>>();
-const listenersByUser = new Map<string, Set<() => void>>();
-
-const getUserKey = (userKey: string | null) =>
-  userKey?.trim().toLowerCase() || 'guest';
-
-const getAttendanceDates = (userKey: string) => {
-  let dates = attendanceByUser.get(userKey);
-  if (!dates) {
-    dates = new Set<string>();
-    attendanceByUser.set(userKey, dates);
-  }
-
-  return dates;
-};
+import { db } from '../../assets/database/firebase';
 
 const toDateKey = (date: Date) => {
   const year = date.getFullYear();
@@ -24,8 +16,14 @@ const toDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const getAttendanceSummary = (attendanceDates: Set<string>) => {
-  const today = new Date();
+const isDateKey = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const getAttendanceSummary = (
+  attendanceDates: Set<string>,
+  referenceDate = new Date(),
+) => {
+  const today = new Date(referenceDate);
   const todayKey = toDateKey(today);
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
@@ -73,47 +71,116 @@ const getAttendanceSummary = (attendanceDates: Set<string>) => {
   return { currentStreak, weekTotal, bestStreak };
 };
 
-export const registerAttendance = (
-  userKey: string | null,
+export async function registerAttendance(
+  clientId: string,
+  username: string,
   date = new Date(),
-) => {
-  const normalizedUserKey = getUserKey(userKey);
-  const attendanceDates = getAttendanceDates(normalizedUserKey);
-  const dateKey = toDateKey(date);
-
-  if (attendanceDates.has(dateKey)) {
-    return;
+) {
+  if (!clientId.trim()) {
+    throw new Error('missing-client-id');
+  }
+  if (!username.trim()) {
+    throw new Error('missing-username');
   }
 
-  attendanceDates.add(dateKey);
-  listenersByUser.get(normalizedUserKey)?.forEach((listener) => listener());
-};
+  const dateKey = toDateKey(date);
+  const clientRef = doc(db, 'clientes', clientId);
+  const attendanceRef = doc(db, 'asistencias', `${clientId}_${dateKey}`);
 
-export const useAttendance = (userKey: string | null = null) => {
-  const [, forceUpdate] = useState(0);
-  const normalizedUserKey = getUserKey(userKey);
-  const attendanceDates = getAttendanceDates(normalizedUserKey);
+  return runTransaction(db, async (transaction) => {
+    const clientSnapshot = await transaction.get(clientRef);
+    if (!clientSnapshot.exists()) {
+      throw new Error('client-not-found');
+    }
+    const attendanceSnapshot = await transaction.get(attendanceRef);
+
+    const clientData = clientSnapshot.data();
+    const attendanceDates = new Set(
+      Array.isArray(clientData.asistencias)
+        ? clientData.asistencias.filter(isDateKey)
+        : [],
+    );
+
+    const wasAlreadyRegistered =
+      attendanceDates.has(dateKey) || attendanceSnapshot.exists();
+
+    attendanceDates.add(dateKey);
+    const { currentStreak, bestStreak } = getAttendanceSummary(
+      attendanceDates,
+      date,
+    );
+
+    if (!attendanceSnapshot.exists()) {
+      const firstName =
+        typeof clientData.nombre === 'string' ? clientData.nombre : '';
+      const lastName =
+        typeof clientData.apellido === 'string' ? clientData.apellido : '';
+
+      transaction.set(attendanceRef, {
+        nombreUsuario: username.trim(),
+        usuario: username.trim(),
+        hora: serverTimestamp(),
+        fecha: dateKey,
+        cliente: clientId,
+        nombreCliente: [firstName, lastName].filter(Boolean).join(' '),
+        estado: 'presente',
+      });
+    }
+
+    transaction.update(clientRef, {
+      asistencias: [...attendanceDates].sort(),
+      rachaAsistencia: currentStreak,
+      mejorRachaAsistencia: bestStreak,
+      totalAsistencias: attendanceDates.size,
+    });
+
+    return !wasAlreadyRegistered;
+  });
+}
+
+export const useAttendance = (clientId: string | null = null) => {
+  const [attendanceState, setAttendanceState] = useState<{
+    clientId: string;
+    dates: string[];
+    error: boolean;
+  } | null>(null);
+  const normalizedClientId = clientId?.trim() || null;
 
   useEffect(() => {
-    const listener = () => forceUpdate((value) => value + 1);
-    let userListeners = listenersByUser.get(normalizedUserKey);
-    if (!userListeners) {
-      userListeners = new Set<() => void>();
-      listenersByUser.set(normalizedUserKey, userListeners);
+    if (!normalizedClientId) {
+      return;
     }
-    userListeners.add(listener);
 
-    return () => {
-      userListeners?.delete(listener);
-      if (userListeners?.size === 0) {
-        listenersByUser.delete(normalizedUserKey);
-      }
-    };
-  }, [normalizedUserKey]);
+    return onSnapshot(
+      doc(db, 'clientes', normalizedClientId),
+      (snapshot) => {
+        const dates = snapshot.data()?.asistencias;
+        setAttendanceState({
+          clientId: normalizedClientId,
+          dates: Array.isArray(dates) ? dates.filter(isDateKey) : [],
+          error: false,
+        });
+      },
+      (error) => {
+        console.error('Error al cargar las asistencias del cliente:', error);
+        setAttendanceState({
+          clientId: normalizedClientId,
+          dates: [],
+          error: true,
+        });
+      },
+    );
+  }, [normalizedClientId]);
+
+  const isCurrentClient = attendanceState?.clientId === normalizedClientId;
+  const attendanceDates = isCurrentClient ? attendanceState.dates : [];
+  const attendanceError = isCurrentClient && attendanceState.error;
+  const attendanceDateSet = new Set(attendanceDates);
 
   return {
-    hasAttendance: (date: Date) => attendanceDates.has(toDateKey(date)),
-    total: attendanceDates.size,
-    ...getAttendanceSummary(attendanceDates),
+    hasAttendance: (date: Date) => attendanceDateSet.has(toDateKey(date)),
+    total: attendanceDates.length,
+    attendanceError,
+    ...getAttendanceSummary(attendanceDateSet),
   };
 };

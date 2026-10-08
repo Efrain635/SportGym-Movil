@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, usePathname } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
     Alert,
     Modal,
@@ -76,11 +76,17 @@ export default function HomeView() {
   const [bottomNavIndex, setBottomNavIndex] = useState(0);
   const pathname = usePathname();
   const [isScannerVisible, setIsScannerVisible] = useState(false);
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+  const scanInProgress = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
   const { user } = useAuth();
-  const { hasAttendance, currentStreak, weekTotal, bestStreak } = useAttendance(
-    user?.username ?? null,
-  );
+  const {
+    hasAttendance,
+    currentStreak,
+    weekTotal,
+    bestStreak,
+    attendanceError,
+  } = useAttendance(user?.clientId ?? null);
   const weekDates = getCurrentWeekDates();
   const membership = user?.membership ?? null;
   const membershipStartDate = parseMembershipDate(membership?.startDate ?? null);
@@ -121,10 +127,40 @@ export default function HomeView() {
     router.push(tabMap[key] as never);
   };
 
-  const handleScan = ({ data }: { data: string }) => {
-    registerAttendance(user?.username ?? null);
-    setIsScannerVisible(false);
-    Alert.alert('Asistencia registrada', 'Tu entrada al gimnasio fue registrada correctamente.');
+  const handleScan = async ({ data }: { data: string }) => {
+    if (scanInProgress.current || !data.trim() || !user?.clientId) {
+      return;
+    }
+
+    scanInProgress.current = true;
+    setIsSavingAttendance(true);
+
+    try {
+      const wasRegistered = await registerAttendance(
+        user.clientId,
+        user.username,
+      );
+      setIsScannerVisible(false);
+      Alert.alert(
+        wasRegistered ? 'Asistencia registrada' : 'Asistencia ya registrada',
+        wasRegistered
+          ? 'Tu entrada al gimnasio fue registrada correctamente.'
+          : 'Tu asistencia de hoy ya estaba registrada.',
+      );
+    } catch (error) {
+      console.error('Error al registrar la asistencia del cliente:', error);
+      scanInProgress.current = false;
+      const errorCode = (error as { code?: string }).code;
+      const message =
+        errorCode === 'permission-denied'
+          ? 'Firebase no permite guardar tu asistencia. Revisa las reglas de la colección clientes.'
+          : errorCode === 'client-not-found'
+            ? 'No se encontró tu registro de cliente. Cierra sesión e inicia nuevamente.'
+            : 'No fue posible guardar tu asistencia. Verifica tu conexión e inténtalo de nuevo.';
+      Alert.alert('No se pudo registrar', message);
+    } finally {
+      setIsSavingAttendance(false);
+    }
   };
 
   return (
@@ -208,7 +244,17 @@ export default function HomeView() {
                   styles.scanButton,
                   pressed && styles.buttonPressed,
                 ]}
-                onPress={() => setIsScannerVisible(true)}
+                onPress={() => {
+                  if (!user?.clientId) {
+                    Alert.alert(
+                      'No se pudo identificar al cliente',
+                      'Cierra sesión e inicia nuevamente antes de registrar tu asistencia.',
+                    );
+                    return;
+                  }
+                  scanInProgress.current = false;
+                  setIsScannerVisible(true);
+                }}
               >
                 <Ionicons name="qr-code-outline" size={19} color="#FFFFFF" />
                 <ThemedText style={styles.scanButtonText}>
@@ -297,6 +343,11 @@ export default function HomeView() {
                   <ThemedText style={styles.streakCount}>
                     {currentStreak} {currentStreak === 1 ? 'día' : 'días'} seguidos
                   </ThemedText>
+                  {attendanceError && (
+                    <ThemedText style={styles.attendanceError}>
+                      No se pudo cargar tu historial de asistencias.
+                    </ThemedText>
+                  )}
                 </View>
               </View>
 
@@ -449,7 +500,9 @@ export default function HomeView() {
           {permission?.granted && (
             <View style={styles.scannerHint}>
               <Text style={styles.scannerHintText}>
-                Apunta al código QR de asistencia
+                {isSavingAttendance
+                  ? 'Guardando tu asistencia...'
+                  : 'Apunta al código QR de asistencia'}
               </Text>
             </View>
           )}
@@ -783,6 +836,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     marginTop: 2,
+  },
+
+  attendanceError: {
+    color: '#A32626',
+    fontSize: 12,
+    marginTop: 4,
   },
 
   weekDays: {
