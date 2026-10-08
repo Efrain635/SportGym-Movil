@@ -1,32 +1,90 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { Image } from "expo-image";
+import { router, usePathname } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    ImageBackground,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  ImageBackground,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-    getClientFavoriteExercises,
-    getClientRoutineExercises,
-    removeFavoriteExercise,
-    saveCompletedWorkout,
-    updateRoutineExerciseTargets,
-    type CompletedWorkoutExercise,
-    type SavedFavoriteExercise,
-    type SavedRoutineExercise,
+  getClientFavoriteExercises,
+  getClientRoutineExercises,
+  removeFavoriteExercise,
+  saveCompletedWorkout,
+  updateRoutineExerciseTargets,
+  type CompletedWorkoutExercise,
+  type SavedFavoriteExercise,
+  type SavedRoutineExercise,
 } from "../../assets/database/firebase";
+import exerciseData from "../../assets/exercises/exercises.json";
+import { AnimatedBottomNav } from "../components/AnimatedBottomTab";
 import { ThemedText } from "../components/themed-text";
 import { SportGymColors } from "../constants/theme";
 import { useAuth, type User } from "../contexts/AuthContext";
 
+type Exercise = {
+  id: string;
+  name_es: string;
+  description_es?: string;
+  category: string;
+  body_part: string;
+  equipment?: string;
+  primary_muscles: string[];
+  tags?: string[];
+  variation_group?: string;
+  difficulty?: "beginner" | "intermediate" | "advanced";
+  instructions_es?: string[];
+  images?: { flat?: { start?: string; peak?: string; main?: string } };
+};
+
+const sourceExercises = (exerciseData as { exercises: Exercise[] }).exercises;
+const exerciseImages = require.context(
+  "../../assets/exercises/images/flat",
+  false,
+  /\.webp$/i,
+);
+const exerciseImageKeys = new Set(exerciseImages.keys());
+
+function getImageSource(exercise: Exercise) {
+  const filePaths = [
+    exercise.images?.flat?.start,
+    exercise.images?.flat?.peak,
+    exercise.images?.flat?.main,
+    `${exercise.id}-start.webp`,
+    `${exercise.id}-peak.webp`,
+    `${exercise.id}-main.webp`,
+  ];
+
+  for (const filePath of filePaths) {
+    if (!filePath) continue;
+    const key = `./${filePath.split("/").pop()}`;
+    if (exerciseImageKeys.has(key)) return exerciseImages(key) as number;
+  }
+
+  return undefined;
+}
+
+function getExerciseById(id: string): Exercise | undefined {
+  return sourceExercises.find((ex) => ex.id === id);
+}
+
 type Filter = "Todos" | "Hoy" | "Semana";
+type MuscleFilter = "Todos" | "Pecho" | "Espalda" | "Hombros" | "Brazos" | "Abdomen" | "Piernas";
+
+const tabKeyToIndex: Record<string, number> = {
+  inicio: 0,
+  rutina: 1,
+  tienda: 2,
+  nutricion: 3,
+};
 
 type TabName = "Inicio" | "Rutina" | "Tienda" | "Nutrición";
 
@@ -64,11 +122,11 @@ export default function RoutineView() {
   );
   const [selectedRoutineDay, setSelectedRoutineDay] = useState("Lunes");
   const [routines, setRoutines] = useState<Routine[]>([]);
-  const [savedExercises, setSavedExercises] = useState<SavedFavoriteExercise[]>(
-    [],
-  );
+  const [savedExercises, setSavedExercises] = useState<SavedFavoriteExercise[]>([]);
   const [isLoadingRoutine, setIsLoadingRoutine] = useState(false);
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
+  const [bottomNavIndex, setBottomNavIndex] = useState(0); // Start at Inicio (hub)
+  const pathname = usePathname();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -147,6 +205,14 @@ export default function RoutineView() {
   const handleTabPress = (tab: TabName) => {
     setActiveTab(tab);
 
+    const indexMap: Record<TabName, number> = {
+      Inicio: 0,
+      Rutina: 1,
+      Tienda: 2,
+      Nutrición: 3,
+    };
+    setBottomNavIndex(indexMap[tab]);
+
     switch (tab) {
       case "Inicio":
         router.push("/(tabs)");
@@ -163,6 +229,16 @@ export default function RoutineView() {
     }
   };
 
+  const handleBottomNavChange = (index: number, key: string) => {
+    const tabMap: Record<string, TabName> = {
+      inicio: "Inicio",
+      rutina: "Rutina",
+      tienda: "Tienda",
+      nutricion: "Nutrición",
+    };
+    handleTabPress(tabMap[key]);
+  };
+
   const filteredRoutines = routines.filter((routine) => {
     return activeFilter !== "Hoy" || routine.dia === currentDayLabel;
   });
@@ -176,6 +252,8 @@ export default function RoutineView() {
         )}
         user={user}
         onBack={() => setScreen("routine")}
+        bottomNavIndex={bottomNavIndex}
+        onBottomNavChange={handleBottomNavChange}
       />
     );
   }
@@ -206,6 +284,8 @@ export default function RoutineView() {
             );
           }
         }}
+        bottomNavIndex={bottomNavIndex}
+        onBottomNavChange={handleBottomNavChange}
       />
     );
   }
@@ -322,39 +402,10 @@ export default function RoutineView() {
           {/* NAVEGACIÓN */}
           {/* ========================================= */}
 
-          <View style={styles.bottomNavigation}>
-            <BottomTab
-              label="Inicio"
-              icon="home-outline"
-              activeIcon="home"
-              active={activeTab === "Inicio"}
-              onPress={() => handleTabPress("Inicio")}
-            />
-
-            <BottomTab
-              label="Rutina"
-              icon="barbell-outline"
-              activeIcon="barbell"
-              active={activeTab === "Rutina"}
-              onPress={() => handleTabPress("Rutina")}
-            />
-
-            <BottomTab
-              label="Tienda"
-              icon="flask-outline"
-              activeIcon="flask"
-              active={activeTab === "Tienda"}
-              onPress={() => handleTabPress("Tienda")}
-            />
-
-            <BottomTab
-              label="Nutrición"
-              icon="nutrition-outline"
-              activeIcon="nutrition"
-              active={activeTab === "Nutrición"}
-              onPress={() => handleTabPress("Nutrición")}
-            />
-          </View>
+          <AnimatedBottomNav
+            initialIndex={bottomNavIndex}
+            onChange={onBottomNavChange}
+          />
         </View>
       </SafeAreaView>
     </View>
@@ -372,6 +423,8 @@ type TrainingHubProps = {
   isLoadingSaved: boolean;
   isClientSignedIn: boolean;
   onRemoveFavorite: (exerciseId: string) => void;
+  bottomNavIndex: number;
+  onBottomNavChange: (index: number, key: string) => void;
 };
 
 function TrainingHub({
@@ -385,7 +438,39 @@ function TrainingHub({
   isLoadingSaved,
   isClientSignedIn,
   onRemoveFavorite,
+  bottomNavIndex,
+  onBottomNavChange,
 }: TrainingHubProps) {
+  const [muscleFilter, setMuscleFilter] = useState<MuscleFilter>("Todos");
+
+  const muscleGroups: MuscleFilter[] = [
+    "Todos",
+    "Pecho",
+    "Espalda",
+    "Hombros",
+    "Brazos",
+    "Abdomen",
+    "Piernas",
+  ];
+
+  const filteredExercises = savedExercises.filter((exercise) => {
+    if (muscleFilter === "Todos") return true;
+    const exerciseDetail = getExerciseById(exercise.ejercicioId);
+    if (!exerciseDetail) return false;
+
+    const bodyPartMap: Record<string, MuscleFilter> = {
+      chest: "Pecho",
+      back: "Espalda",
+      shoulders: "Hombros",
+      upper_arms: "Brazos",
+      lower_arms: "Brazos",
+      core: "Abdomen",
+      upper_legs: "Piernas",
+      lower_legs: "Piernas",
+    };
+
+    return bodyPartMap[exerciseDetail.body_part] === muscleFilter;
+  });
   return (
     <View style={styles.screen}>
       <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -432,79 +517,70 @@ function TrainingHub({
                   </ThemedText>
                 </View>
               ) : savedExercises.length > 0 ? (
-                <View style={styles.savedExercisesList}>
-                  {savedExercises.map((exercise) => (
-                    <View key={exercise.id} style={styles.savedExerciseCard}>
-                      <View style={styles.savedExerciseMain}>
-                        <View style={styles.savedExerciseIcon}>
-                          <Ionicons
-                            name="barbell-outline"
-                            size={22}
-                            color="#B7D9A9"
-                          />
-                        </View>
-                        <View style={styles.savedExerciseTitleBlock}>
-                          <ThemedText
-                            style={styles.savedExerciseName}
-                            numberOfLines={2}
-                          >
-                            {exercise.ejercicioNombre}
-                          </ThemedText>
-                          <View style={styles.favoriteBadge}>
-                            <Ionicons name="heart" size={11} color="#F18B86" />
-                            <ThemedText style={styles.favoriteBadgeText}>
-                              FAVORITO
-                            </ThemedText>
-                          </View>
-                        </View>
+                <>
+                  {/* Filtros por grupo muscular */}
+                  <View style={styles.savedFiltersContainer}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.savedFiltersScroll}
+                    >
+                      {muscleGroups.map((group) => (
                         <Pressable
-                          style={({ pressed }) => [
-                            styles.removeFavoriteButton,
-                            pressed && styles.tabPressed,
+                          key={group}
+                          style={[
+                            styles.savedFilterChip,
+                            muscleFilter === group && styles.savedFilterChipActive,
                           ]}
-                          onPress={() => onRemoveFavorite(exercise.ejercicioId)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Quitar ${exercise.ejercicioNombre} de favoritos`}
-                          hitSlop={8}
+                          onPress={() => setMuscleFilter(group)}
                         >
-                          <Ionicons
-                            name="heart-dislike-outline"
-                            size={19}
-                            color="#F18B86"
-                          />
+                          <ThemedText
+                            style={[
+                              styles.savedFilterChipText,
+                              muscleFilter === group && styles.savedFilterChipTextActive,
+                            ]}
+                          >
+                            {group}
+                          </ThemedText>
                         </Pressable>
-                      </View>
-                      <View style={styles.savedExerciseTags}>
-                        <View style={styles.savedExerciseTag}>
-                          <Ionicons
-                            name="body-outline"
-                            size={13}
-                            color="#B8C2B2"
-                          />
-                          <ThemedText
-                            style={styles.savedExerciseTagText}
-                            numberOfLines={1}
-                          >
-                            {exercise.grupoMuscular}
-                          </ThemedText>
-                        </View>
-                        <View style={styles.savedExerciseTag}>
-                          <Ionicons
-                            name="barbell-outline"
-                            size={13}
-                            color="#B8C2B2"
-                          />
-                          <ThemedText
-                            style={styles.savedExerciseTagText}
-                            numberOfLines={1}
-                          >
-                            {exercise.equipo}
-                          </ThemedText>
-                        </View>
-                      </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* Lista de ejercicios */}
+                  <View style={styles.savedExercisesList}>
+                    {filteredExercises.map((exercise) => {
+                      const exerciseDetail = getExerciseById(exercise.ejercicioId);
+                      const imageSource = exerciseDetail ? getImageSource(exerciseDetail) : undefined;
+
+                      return (
+                        <AnimatedExerciseCard
+                          key={exercise.id}
+                          exercise={exercise}
+                          exerciseDetail={exerciseDetail}
+                          imageSource={imageSource}
+                          onRemoveFavorite={() => onRemoveFavorite(exercise.ejercicioId)}
+                        />
+                      );
+                    })}
+                  </View>
+
+                  {filteredExercises.length === 0 && (
+                    <View style={styles.savedState}>
+                      <Ionicons
+                        name="filter-outline"
+                        size={30}
+                        color={SportGymColors.primary}
+                      />
+                      <ThemedText style={styles.savedTitle}>
+                        No hay ejercicios en este grupo
+                      </ThemedText>
+                      <ThemedText style={styles.savedDescription}>
+                        Prueba con otro filtro o agrega más ejercicios a tus favoritos.
+                      </ThemedText>
                     </View>
-                  ))}
-                </View>
+                  )}
+                </>
               ) : (
                 <View style={styles.savedState}>
                   <View style={styles.savedIcon}>
@@ -603,39 +679,185 @@ function TrainingHub({
             )}
           </ScrollView>
 
-          <View style={styles.bottomNavigation}>
-            <BottomTab
-              label="Inicio"
-              icon="home-outline"
-              activeIcon="home"
-              active={false}
-              onPress={() => onTabPress("Inicio")}
-            />
-            <BottomTab
-              label="Rutina"
-              icon="barbell-outline"
-              activeIcon="barbell"
-              active
-              onPress={() => onTabPress("Rutina")}
-            />
-            <BottomTab
-              label="Tienda"
-              icon="flask-outline"
-              activeIcon="flask"
-              active={false}
-              onPress={() => onTabPress("Tienda")}
-            />
-            <BottomTab
-              label="Nutrición"
-              icon="nutrition-outline"
-              activeIcon="nutrition"
-              active={false}
-              onPress={() => onTabPress("Nutrición")}
-            />
-          </View>
+          <AnimatedBottomNav
+            initialIndex={bottomNavIndex}
+            onChange={onBottomNavChange}
+          />
         </View>
       </SafeAreaView>
     </View>
+  );
+}
+
+type AnimatedExerciseCardProps = {
+  exercise: SavedFavoriteExercise;
+  exerciseDetail?: Exercise;
+  imageSource?: number;
+  onRemoveFavorite: () => void;
+};
+
+function AnimatedExerciseCard({
+  exercise,
+  exerciseDetail,
+  imageSource,
+  onRemoveFavorite,
+}: AnimatedExerciseCardProps) {
+  const scaleAnim = useState(new Animated.Value(1))[0];
+  const opacityAnim = useState(new Animated.Value(1))[0];
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 4,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 4,
+    }).start();
+  };
+
+  const handleRemove = () => {
+    Animated.parallel([
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.9,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onRemoveFavorite();
+    });
+  };
+
+  return (
+    <Animated.View
+      style={[
+        styles.savedExerciseCard,
+        {
+          transform: [{ scale: scaleAnim }],
+          opacity: opacityAnim,
+        },
+      ]}
+    >
+      <Pressable
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={styles.savedExercisePressable}
+      >
+        <View style={styles.savedExerciseMain}>
+          {/* Imagen del ejercicio */}
+          <View style={styles.savedExerciseImageContainer}>
+            {imageSource ? (
+              <Image
+                source={imageSource}
+                style={styles.savedExerciseImage}
+                contentFit="cover"
+                transition={150}
+              />
+            ) : (
+              <View style={styles.savedExerciseImageFallback}>
+                <Ionicons
+                  name="barbell-outline"
+                  size={28}
+                  color="#B7D9A9"
+                />
+              </View>
+            )}
+          </View>
+
+          {/* Información del ejercicio */}
+          <View style={styles.savedExerciseTitleBlock}>
+            <ThemedText
+              style={styles.savedExerciseName}
+              numberOfLines={2}
+            >
+              {exercise.ejercicioNombre}
+            </ThemedText>
+            <View style={styles.favoriteBadge}>
+              <Ionicons name="heart" size={12} color="#F18B86" />
+              <ThemedText style={styles.favoriteBadgeText}>
+                FAVORITO
+              </ThemedText>
+            </View>
+          </View>
+
+          {/* Botón de eliminar */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.removeFavoriteButton,
+              pressed && styles.removeFavoriteButtonPressed,
+            ]}
+            onPress={handleRemove}
+            accessibilityRole="button"
+            accessibilityLabel={`Quitar ${exercise.ejercicioNombre} de favoritos`}
+            hitSlop={12}
+          >
+            <Ionicons
+              name="heart-dislike-outline"
+              size={20}
+              color="#F18B86"
+            />
+          </Pressable>
+        </View>
+
+        {/* Tags */}
+        <View style={styles.savedExerciseTags}>
+          <View style={styles.savedExerciseTag}>
+            <Ionicons
+              name="body-outline"
+              size={14}
+              color="#B8C2B2"
+            />
+            <ThemedText
+              style={styles.savedExerciseTagText}
+              numberOfLines={1}
+            >
+              {exercise.grupoMuscular}
+            </ThemedText>
+          </View>
+          <View style={styles.savedExerciseTag}>
+            <Ionicons
+              name="barbell-outline"
+              size={14}
+              color="#B8C2B2"
+            />
+            <ThemedText
+              style={styles.savedExerciseTagText}
+              numberOfLines={1}
+            >
+              {exercise.equipo}
+            </ThemedText>
+          </View>
+          {exerciseDetail?.difficulty && (
+            <View style={styles.savedExerciseTag}>
+              <Ionicons
+                name="flash-outline"
+                size={14}
+                color="#B8C2B2"
+              />
+              <ThemedText
+                style={styles.savedExerciseTagText}
+                numberOfLines={1}
+              >
+                {exerciseDetail.difficulty === "beginner" ? "Principiante" :
+                 exerciseDetail.difficulty === "intermediate" ? "Intermedio" : "Avanzado"}
+              </ThemedText>
+            </View>
+          )}
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -759,6 +981,8 @@ type WorkoutSessionScreenProps = {
   exercises: Routine[];
   user: User | null;
   onBack: () => void;
+  bottomNavIndex: number;
+  onBottomNavChange: (index: number, key: string) => void;
 };
 
 function WorkoutSessionScreen({
@@ -766,6 +990,8 @@ function WorkoutSessionScreen({
   exercises,
   user,
   onBack,
+  bottomNavIndex,
+  onBottomNavChange,
 }: WorkoutSessionScreenProps) {
   const [startedAt, setStartedAt] = useState<Date | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -1227,36 +1453,10 @@ function WorkoutSessionScreen({
             ) : null}
           </ScrollView>
 
-          <View style={styles.bottomNavigation}>
-            <BottomTab
-              label="Inicio"
-              icon="home-outline"
-              activeIcon="home"
-              active={false}
-              onPress={() => router.push("/(tabs)")}
-            />
-            <BottomTab
-              label="Rutina"
-              icon="barbell-outline"
-              activeIcon="barbell"
-              active
-              onPress={onBack}
-            />
-            <BottomTab
-              label="Tienda"
-              icon="flask-outline"
-              activeIcon="flask"
-              active={false}
-              onPress={() => router.push("/(tabs)/store")}
-            />
-            <BottomTab
-              label="Nutrición"
-              icon="nutrition-outline"
-              activeIcon="nutrition"
-              active={false}
-              onPress={() => router.push("/(tabs)/nutrition")}
-            />
-          </View>
+          <AnimatedBottomNav
+            initialIndex={bottomNavIndex}
+            onChange={onBottomNavChange}
+          />
         </View>
       </SafeAreaView>
     </View>
@@ -1266,41 +1466,6 @@ function WorkoutSessionScreen({
 /* ===================================================== */
 /* TAB INFERIOR */
 /* ===================================================== */
-
-type BottomTabProps = {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  activeIcon: keyof typeof Ionicons.glyphMap;
-  active: boolean;
-  onPress: () => void;
-};
-
-function BottomTab({
-  label,
-  icon,
-  activeIcon,
-  active,
-  onPress,
-}: BottomTabProps) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.bottomTab, pressed && styles.tabPressed]}
-      onPress={onPress}
-    >
-      <Ionicons
-        name={active ? activeIcon : icon}
-        size={23}
-        color={active ? SportGymColors.primary : "#929292"}
-      />
-
-      <ThemedText
-        style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}
-      >
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
-}
 
 /* ===================================================== */
 /* ESTILOS */
@@ -1789,7 +1954,6 @@ const styles = StyleSheet.create({
 
   savedContent: {
     flexGrow: 1,
-    justifyContent: "center",
   },
 
   sessionContent: {
@@ -2092,45 +2256,100 @@ const styles = StyleSheet.create({
   },
 
   savedExercisesList: {
-    gap: 11,
+    gap: 12,
+  },
+
+  savedFiltersContainer: {
+    marginBottom: 16,
+  },
+
+  savedFiltersScroll: {
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+
+  savedFilterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#3A4037",
+    backgroundColor: "#1C1F1C",
+  },
+
+  savedFilterChipActive: {
+    backgroundColor: SportGymColors.primary,
+    borderColor: SportGymColors.primary,
+  },
+
+  savedFilterChipText: {
+    color: "#A8ACA5",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  savedFilterChipTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
   },
 
   savedExerciseCard: {
-    minHeight: 112,
-    justifyContent: "center",
-    paddingHorizontal: 13,
-    paddingVertical: 12,
+    minHeight: 130,
     borderWidth: 1,
-    borderColor: "#343A32",
-    borderRadius: 10,
-    backgroundColor: "#171A17",
+    borderColor: "#3A4037",
+    borderRadius: 14,
+    backgroundColor: "#1C1F1C",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+
+  savedExercisePressable: {
+    flex: 1,
   },
 
   savedExerciseMain: {
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
 
-  savedExerciseIcon: {
-    width: 43,
-    height: 43,
+  savedExerciseImageContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#252A25",
+    borderWidth: 1,
+    borderColor: "#3A4037",
+  },
+
+  savedExerciseImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  savedExerciseImageFallback: {
+    width: "100%",
+    height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#40543B",
-    borderRadius: 9,
-    backgroundColor: "#243321",
+    backgroundColor: "#252A25",
   },
 
   savedExerciseTitleBlock: {
     flex: 1,
-    marginHorizontal: 11,
+    marginHorizontal: 12,
   },
 
   savedExerciseName: {
     color: "#F2F4EF",
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: "800",
   },
 
@@ -2138,58 +2357,71 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginTop: 5,
+    gap: 5,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: "rgba(241, 139, 134, 0.15)",
   },
 
   favoriteBadgeText: {
-    color: "#D98984",
-    fontSize: 9,
+    color: "#F18B86",
+    fontSize: 10,
     fontWeight: "800",
+    letterSpacing: 0.5,
   },
 
   removeFavoriteButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 22,
+    backgroundColor: "#2C211F",
     borderWidth: 1,
     borderColor: "#4A3735",
-    borderRadius: 20,
-    backgroundColor: "#2C211F",
+  },
+
+  removeFavoriteButtonPressed: {
+    backgroundColor: "#3A2A27",
+    transform: [{ scale: 0.95 }],
   },
 
   savedExerciseTags: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 7,
-    marginLeft: 54,
-    marginTop: 10,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    marginLeft: 68,
   },
 
   savedExerciseTag: {
     maxWidth: "100%",
-    minHeight: 25,
+    minHeight: 28,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 8,
+    gap: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "#252A25",
     borderWidth: 1,
     borderColor: "#363D34",
-    borderRadius: 6,
-    backgroundColor: "#202420",
   },
 
   savedExerciseTagText: {
     flexShrink: 1,
     color: "#B8C2B2",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "600",
   },
 
   savedState: {
     alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 12,
+    paddingTop: 80,
   },
 
   savedIcon: {

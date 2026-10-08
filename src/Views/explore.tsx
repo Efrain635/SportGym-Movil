@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { useEffect, useState } from "react";
 import {
     Alert,
@@ -22,6 +22,7 @@ import {
     saveFavoriteExercise,
 } from "../../assets/database/firebase";
 import exerciseData from "../../assets/exercises/exercises.json";
+import { AnimatedBottomNav } from "../components/AnimatedBottomTab";
 import { SportGymColors } from "../constants/theme";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -345,6 +346,8 @@ export default function ExploreExercisesScreen() {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
     null,
   );
+  const [bottomNavIndex, setBottomNavIndex] = useState(1);
+  const pathname = usePathname();
 
   const filteredExercises = exercises.filter((exercise) => {
     const matchesQuery = `${exercise.name_es} ${exercise.description_es || ""}`
@@ -377,6 +380,16 @@ export default function ExploreExercisesScreen() {
     };
 
     router.push(routes[tab] as never);
+  };
+
+  const handleBottomNavChange = (index: number, key: string) => {
+    const tabMap: Record<string, TabName> = {
+      inicio: "Inicio",
+      rutina: "Rutina",
+      tienda: "Tienda",
+      nutricion: "Nutrición",
+    };
+    handleTabPress(tabMap[key]);
   };
 
   const visibleFilters =
@@ -592,32 +605,10 @@ export default function ExploreExercisesScreen() {
             }
           />
 
-          <View style={styles.bottomNavigation}>
-            <BottomTab
-              label="Inicio"
-              icon="home-outline"
-              activeIcon="home"
-              onPress={() => handleTabPress("Inicio")}
-            />
-            <BottomTab
-              label="Rutina"
-              icon="barbell-outline"
-              activeIcon="barbell"
-              onPress={() => handleTabPress("Rutina")}
-            />
-            <BottomTab
-              label="Tienda"
-              icon="flask-outline"
-              activeIcon="flask"
-              onPress={() => handleTabPress("Tienda")}
-            />
-            <BottomTab
-              label="Nutrición"
-              icon="nutrition-outline"
-              activeIcon="nutrition"
-              onPress={() => handleTabPress("Nutrición")}
-            />
-          </View>
+          <AnimatedBottomNav
+            initialIndex={bottomNavIndex}
+            onChange={handleBottomNavChange}
+          />
         </View>
       </SafeAreaView>
 
@@ -652,37 +643,7 @@ function FilterModeButton({ title, active, onPress }: FilterModeButtonProps) {
   );
 }
 
-type BottomTabProps = {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  activeIcon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-};
 
-function BottomTab({ label, icon, activeIcon, onPress }: BottomTabProps) {
-  const active = label === "Rutina";
-
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.bottomTab, pressed && styles.tabPressed]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: active }}
-    >
-      <Ionicons
-        name={active ? activeIcon : icon}
-        size={22}
-        color={active ? SportGymColors.primary : "#929792"}
-      />
-      <Text
-        style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
 
 type ExerciseDetailsProps = {
   exercise: Exercise | null;
@@ -1169,35 +1130,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     marginTop: 6,
-  },
-  bottomNavigation: {
-    height: 76,
-    borderTopWidth: 1,
-    borderTopColor: "#292A2A",
-    backgroundColor: "#0C0D0D",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    paddingHorizontal: 5,
-  },
-  bottomTab: {
-    flex: 1,
-    height: 68,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bottomTabLabel: {
-    color: "#929792",
-    fontSize: 11,
-    fontWeight: "500",
-    marginTop: 4,
-  },
-  bottomTabLabelActive: {
-    color: SportGymColors.primary,
-    fontWeight: "800",
-  },
-  tabPressed: {
-    opacity: 0.65,
   },
   modalBackdrop: {
     flex: 1,

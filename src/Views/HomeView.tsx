@@ -1,6 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { useState } from 'react';
 import {
     Alert,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AnimatedBottomNav } from '../components/AnimatedBottomTab';
 import { ThemedText } from '../components/themed-text';
 import { SportGymColors } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
@@ -72,7 +73,8 @@ const getCurrentWeekDates = () => {
 };
 
 export default function HomeView() {
-  const [activeTab, setActiveTab] = useState<TabName>('Inicio');
+  const [bottomNavIndex, setBottomNavIndex] = useState(0);
+  const pathname = usePathname();
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const { user } = useAuth();
@@ -109,23 +111,14 @@ export default function HomeView() {
   const membershipDaysRemaining =
     daysUntilExpiration === null ? null : Math.max(0, daysUntilExpiration);
 
-  const handleTabPress = (tab: TabName) => {
-    setActiveTab(tab);
-
-    switch (tab) {
-      case 'Inicio':
-        router.push('/(tabs)');
-        break;
-      case 'Rutina':
-        router.push('/(tabs)/routine');
-        break;
-      case 'Tienda':
-        router.push('/(tabs)/store');
-        break;
-      case 'Nutrición':
-        router.push('/(tabs)/nutrition');
-        break;
-    }
+  const handleBottomNavChange = (index: number, key: string) => {
+    const tabMap: Record<string, string> = {
+      inicio: '/(tabs)',
+      rutina: '/(tabs)/routine',
+      tienda: '/(tabs)/store',
+      nutricion: '/(tabs)/nutrition',
+    };
+    router.push(tabMap[key] as never);
   };
 
   const handleScan = ({ data }: { data: string }) => {
@@ -390,41 +383,10 @@ export default function HomeView() {
           {/* NAVEGACIÓN INFERIOR */}
           {/* ================================================= */}
 
-          <View style={styles.bottomNavigation}>
-
-            <BottomTab
-              label="Inicio"
-              icon="home"
-              activeIcon="home"
-              active={activeTab === 'Inicio'}
-              onPress={() => handleTabPress('Inicio')}
-            />
-
-            <BottomTab
-              label="Rutina"
-              icon="barbell-outline"
-              activeIcon="barbell"
-              active={activeTab === 'Rutina'}
-              onPress={() => handleTabPress('Rutina')}
-            />
-
-            <BottomTab
-              label="Tienda"
-              icon="flask-outline"
-              activeIcon="flask"
-              active={activeTab === 'Tienda'}
-              onPress={() => handleTabPress('Tienda')}
-            />
-
-            <BottomTab
-              label="Nutrición"
-              icon="nutrition-outline"
-              activeIcon="nutrition"
-              active={activeTab === 'Nutrición'}
-              onPress={() => handleTabPress('Nutrición')}
-            />
-
-          </View>
+          <AnimatedBottomNav
+            initialIndex={bottomNavIndex}
+            onChange={handleBottomNavChange}
+          />
 
           <Pressable
             style={({ pressed }) => [
@@ -494,56 +456,6 @@ export default function HomeView() {
         </View>
       </Modal>
     </View>
-  );
-}
-
-
-/* ========================================================= */
-/* COMPONENTE TAB INFERIOR */
-/* ========================================================= */
-
-type BottomTabProps = {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  activeIcon: keyof typeof Ionicons.glyphMap;
-  active: boolean;
-  onPress: () => void;
-};
-
-function BottomTab({
-  label,
-  icon,
-  activeIcon,
-  active,
-  onPress,
-}: BottomTabProps) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.bottomTab,
-        pressed && styles.tabPressed,
-      ]}
-      onPress={onPress}
-    >
-      <Ionicons
-        name={active ? activeIcon : icon}
-        size={23}
-        color={
-          active
-            ? SportGymColors.primary
-            : '#9A9A9A'
-        }
-      />
-
-      <ThemedText
-        style={[
-          styles.bottomTabLabel,
-          active && styles.bottomTabLabelActive,
-        ]}
-      >
-        {label}
-      </ThemedText>
-    </Pressable>
   );
 }
 
@@ -1079,31 +991,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 15,
     fontWeight: '600',
-  },
-
-  bottomTab: {
-    flex: 1,
-
-    height: 68,
-
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  bottomTabLabel: {
-    color: '#8D8D8D',
-
-    fontSize: 11,
-
-    fontWeight: '500',
-
-    marginTop: 4,
-  },
-
-  bottomTabLabelActive: {
-    color: SportGymColors.primary,
-
-    fontWeight: '800',
   },
 
   tabPressed: {

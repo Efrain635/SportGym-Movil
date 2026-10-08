@@ -1,34 +1,27 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AnimatedBottomNav } from "../components/AnimatedBottomTab";
 import { ThemedText } from "../components/themed-text";
 import { SportGymColors } from "../constants/theme";
 
 type TabName = "Inicio" | "Rutina" | "Tienda" | "Nutrición";
 
 export default function NutritionView() {
-  const [activeTab, setActiveTab] = useState<TabName>("Nutrición");
+  const [bottomNavIndex, setBottomNavIndex] = useState(3);
+  const pathname = usePathname();
 
-  const handleTabPress = (tab: TabName) => {
-    setActiveTab(tab);
-
-    switch (tab) {
-      case "Inicio":
-        router.push("/(tabs)");
-        break;
-      case "Rutina":
-        router.push("/(tabs)/routine");
-        break;
-      case "Tienda":
-        router.push("/(tabs)/store");
-        break;
-      case "Nutrición":
-        router.push("/(tabs)/nutrition");
-        break;
-    }
+  const handleBottomNavChange = (index: number, key: string) => {
+    const tabMap: Record<string, string> = {
+      inicio: "/(tabs)",
+      rutina: "/(tabs)/routine",
+      tienda: "/(tabs)/store",
+      nutricion: "/(tabs)/nutrition",
+    };
+    router.push(tabMap[key] as never);
   };
   return (
     <View style={styles.screen}>
@@ -69,36 +62,10 @@ export default function NutritionView() {
             </View>
           </ScrollView>
 
-          <View style={styles.bottomNavigation}>
-            <BottomTab
-              label="Inicio"
-              icon="home-outline"
-              activeIcon="home"
-              active={activeTab === "Inicio"}
-              onPress={() => handleTabPress("Inicio")}
-            />
-            <BottomTab
-              label="Rutina"
-              icon="barbell-outline"
-              activeIcon="barbell"
-              active={activeTab === "Rutina"}
-              onPress={() => handleTabPress("Rutina")}
-            />
-            <BottomTab
-              label="Tienda"
-              icon="flask-outline"
-              activeIcon="flask"
-              active={activeTab === "Tienda"}
-              onPress={() => handleTabPress("Tienda")}
-            />
-            <BottomTab
-              label="Nutrición"
-              icon="nutrition-outline"
-              activeIcon="nutrition"
-              active={activeTab === "Nutrición"}
-              onPress={() => handleTabPress("Nutrición")}
-            />
-          </View>
+          <AnimatedBottomNav
+            initialIndex={bottomNavIndex}
+            onChange={handleBottomNavChange}
+          />
         </View>
       </SafeAreaView>
     </View>
@@ -165,57 +132,4 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   infoText: { color: "#BDBDBD", fontSize: 14, lineHeight: 20 },
-  bottomNavigation: {
-    height: 76,
-    backgroundColor: "#0C0D0D",
-    borderTopWidth: 1,
-    borderTopColor: "#292A2A",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    paddingHorizontal: 5,
-  },
-  bottomTab: {
-    flex: 1,
-    height: 68,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tabPressed: { opacity: 0.65 },
-  bottomTabLabel: { color: "#929292", fontSize: 11, fontWeight: "500" },
-  bottomTabLabelActive: { color: SportGymColors.primary, fontWeight: "800" },
 });
-
-type BottomTabProps = {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  activeIcon: keyof typeof Ionicons.glyphMap;
-  active?: boolean;
-  onPress: () => void;
-};
-
-function BottomTab({
-  label,
-  icon,
-  activeIcon,
-  active = false,
-  onPress,
-}: BottomTabProps) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.bottomTab, pressed && styles.tabPressed]}
-      onPress={onPress}
-    >
-      <Ionicons
-        name={active ? activeIcon : icon}
-        size={23}
-        color={active ? SportGymColors.primary : "#929292"}
-      />
-      <ThemedText
-        style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}
-      >
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
-}

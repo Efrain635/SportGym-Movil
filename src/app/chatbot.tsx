@@ -1,66 +1,166 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useRef, useState } from "react";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import { router } from "expo-router";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
+  FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
+  Text,
   TextInput,
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ThemedText } from "../components/themed-text";
 import { useAuth } from "../contexts/AuthContext";
 import { type ClientProfile } from "../lib/fitness-ai";
 import { askSporti } from "../lib/sporti-groq";
 
-const formatTime = (date: Date) => {
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  const hours12 = hours % 12 || 12;
-  const minutesStr = minutes.toString().padStart(2, '0');
-  return `${hours12}:${minutesStr} ${ampm}`;
-};
+const GREEN = "#4C9A3A";
+const GREEN_DARK = "#3F8A2F";
+const BUBBLE_BG = "#E6E6E6";
+const TEXT_DARK = "#111111";
+const TEXT_MUTED = "#8A8A8A";
 
 type Message = {
-  id: number;
+  id: string;
+  from: "bot" | "user";
   text: string;
-  sender: "sporti" | "user";
-  timestamp: Date;
 };
+
+type Option = {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+};
+
+type QuestionOption = {
+  label: string;
+  value: string;
+};
+
+type Question = {
+  key: string;
+  question: string;
+  options: QuestionOption[];
+};
+
+const OPTIONS: Option[] = [
+  {
+    id: "masa",
+    title: "Ganar masa muscular",
+    subtitle: "Aumentar fuerza y volumen",
+    icon: "arm-flex",
+  },
+  {
+    id: "grasa",
+    title: "Perder grasa",
+    subtitle: "Definir y tonificar",
+    icon: "human-handsdown",
+  },
+  {
+    id: "condicion",
+    title: "Mejorar condición física",
+    subtitle: "Más energía y resistencia",
+    icon: "heart-pulse",
+  },
+  {
+    id: "mantener",
+    title: "Mantenerme en forma",
+    subtitle: "Salud y bienestar general",
+    icon: "yoga",
+  },
+];
 
 export default function ChatbotScreen() {
   const { user } = useAuth();
-  
-  const initialMessage = useMemo(() => {
+  const listRef = useRef<FlatList<Message>>(null);
+
+  const userName = useMemo(() => {
     const firstName = user?.firstName || "";
     const lastName = user?.lastName || "";
-    const fullName = firstName && lastName ? `${firstName} ${lastName}` : firstName;
-    const greeting = fullName ? `¡Hola ${fullName}!` : "¡Hola!";
-    return {
-      id: 1,
-      sender: "sporti" as const,
-      text: `${greeting} Soy Sporti, tu asistente de fitness 💪. Puedo ayudarte con rutinas, nutrición, técnica de ejercicios y más. Pregúntame lo que necesites sobre el gimnasio.`,
-      timestamp: new Date(),
-    };
+    return firstName && lastName ? `${firstName} ${lastName}` : firstName || "Usuario";
   }, [user?.firstName, user?.lastName]);
-  
+
+  const initialMessage = useMemo(() => {
+    return {
+      id: "welcome",
+      from: "bot" as const,
+      text: `¡Hola ${userName}! Soy Sporti, tu asistente de fitness 💪. Para crear tu plan personalizado, primero necesito saber cuál es tu objetivo principal. Selecciona una de las opciones:`,
+    };
+  }, [userName]);
+
   const [messages, setMessages] = useState<Message[]>([initialMessage]);
+  const [showOptions, setShowOptions] = useState(true);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const nextMessageId = useMemo(() => messages.length + 1, [messages.length]);
-  const quickActions = [
-    "Ganar masa muscular",
-    "Perder grasa",
-    "Mejorar condición física",
-    "Mantenerme en forma",
-    "¿Cuánto tiempo puedo entrenar?",
-    "Quiero mejorar mi alimentación",
-  ];
+  const loadingAnim = useRef(new Animated.Value(0)).current;
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const [conversationStep, setConversationStep] = useState<"initial" | "goal" | "details" | "complete" | "summary">("initial");
+  const [userGoal, setUserGoal] = useState<string | null>(null);
+  const [userResponses, setUserResponses] = useState<Record<string, string>>({});
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [showSummary, setShowSummary] = useState(false);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [showOptionsDelayed, setShowOptionsDelayed] = useState(false);
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
+      () => setIsKeyboardOpen(true)
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide',
+      () => setIsKeyboardOpen(false)
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (showOptions || currentQuestion) {
+      setShowOptionsDelayed(false);
+      setTimeout(() => setShowOptionsDelayed(true), 300);
+    } else {
+      setShowOptionsDelayed(false);
+    }
+  }, [showOptions, currentQuestion]);
+
+  const dynamicOptions = useMemo(() => {
+    return OPTIONS;
+  }, []);
+
+  React.useEffect(() => {
+    if (isLoading) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(loadingAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(loadingAnim, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      loadingAnim.setValue(0);
+    }
+  }, [isLoading]);
 
   const profile: ClientProfile | null = user
     ? {
@@ -80,42 +180,360 @@ export default function ChatbotScreen() {
       }
     : null;
 
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const headerHeight = 140;
-  const headerTranslateY = scrollY.interpolate({
-    inputRange: [0, headerHeight],
-    outputRange: [0, -headerHeight],
-    extrapolate: 'clamp',
-  });
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, headerHeight / 2, headerHeight],
-    outputRange: [1, 0.5, 0],
-    extrapolate: 'clamp',
+  const scrollToEnd = () =>
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+
+  const copyMessage = async (text: string, id: string) => {
+    await Clipboard.setStringAsync(text);
+    setCopiedMessageId(id);
+    setTimeout(() => setCopiedMessageId(null), 2000);
+  };
+
+  const clearChat = () => {
+    setMessages([initialMessage]);
+    setShowOptions(true);
+    setUserGoal(null);
+    setUserResponses({});
+    setCurrentQuestion(null);
+    setCurrentQuestionIndex(0);
+    setConversationStep("initial");
+    setShowSummary(false);
+  };
+
+  const shakeInput = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const MessageBubble = memo(({ item, onCopy, isCopied }: { item: Message; onCopy: (text: string, id: string) => void; isCopied: boolean }) => {
+    const isBot = item.from === "bot";
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(20)).current;
+
+    React.useEffect(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, [item.id]);
+
+    return (
+      <Animated.View
+        style={[
+          styles.bubble,
+          isBot ? styles.botBubble : styles.userBubble,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
+      >
+        <Text style={[styles.bubbleText, !isBot && styles.userBubbleText]}>
+          {item.text}
+        </Text>
+        {isBot && (
+          <Pressable
+            onPress={() => onCopy(item.text, item.id)}
+            style={styles.copyBtn}
+            hitSlop={8}
+          >
+            <Ionicons
+              name={isCopied ? "checkmark" : "copy-outline"}
+              size={16}
+              color={TEXT_MUTED}
+            />
+          </Pressable>
+        )}
+      </Animated.View>
+    );
   });
 
-  const sendMessage = async (question?: string) => {
-    const textToSend = question || input.trim();
+  const OptionCard = memo(({ opt, index, onSelect }: { opt: Option; index: number; onSelect: (title: string) => void }) => {
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(30)).current;
 
+    React.useEffect(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 400,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, [opt.id, index]);
+
+    return (
+      <Animated.View
+        style={{
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        }}
+      >
+        <Pressable
+          onPress={() => onSelect(opt.title)}
+          style={({ pressed }) => [
+            styles.optionCard,
+            pressed && styles.optionPressed,
+          ]}
+          accessibilityLabel={opt.title}
+          accessibilityHint={opt.subtitle}
+          accessibilityRole="button"
+        >
+          <View style={styles.optionIconBox}>
+            <MaterialCommunityIcons
+              name={opt.icon}
+              size={30}
+              color={TEXT_DARK}
+            />
+          </View>
+          <View style={styles.optionTextBox}>
+            <Text style={styles.optionTitle}>{opt.title}</Text>
+            <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
+          </View>
+        </Pressable>
+      </Animated.View>
+    );
+  });
+
+  const getQuestionsForGoal = (goal: string): Question[] => {
+    const baseQuestions: Question[] = [
+      {
+        key: "duration",
+        question: "¿Cuánto tiempo puedes entrenar por sesión?",
+        options: [
+          { label: "30 minutos", value: "30 minutos" },
+          { label: "45 minutos", value: "45 minutos" },
+          { label: "60 minutos", value: "60 minutos" },
+          { label: "Más de 60 minutos", value: "más de 60 minutos" },
+        ],
+      },
+      {
+        key: "days",
+        question: "¿Cuántos días por semana puedes entrenar?",
+        options: [
+          { label: "2 días", value: "2 días" },
+          { label: "3 días", value: "3 días" },
+          { label: "4 días", value: "4 días" },
+          { label: "5 días", value: "5 días" },
+          { label: "6 días", value: "6 días" },
+        ],
+      },
+      {
+        key: "injuries",
+        question: "¿Tienes alguna condición física o lesión que deba considerar?",
+        options: [
+          { label: "Ninguna", value: "Ninguna" },
+          { label: "Dolor de espalda", value: "Dolor de espalda" },
+          { label: "Dolor de rodillas", value: "Dolor de rodillas" },
+          { label: "Lesión de hombro", value: "Lesión de hombro" },
+          { label: "Otra", value: "Otra" },
+        ],
+      },
+      {
+        key: "lifestyle",
+        question: "¿Cuál es tu estilo de vida?",
+        options: [
+          { label: "Estudiante", value: "Estudiante" },
+          { label: "Trabajo de oficina", value: "Trabajo de oficina" },
+          { label: "Trabajo físico", value: "Trabajo físico" },
+        ],
+      },
+    ];
+
+    const goalSpecificQuestions: Record<string, Question[]> = {
+      "Ganar masa muscular": [
+        {
+          key: "focus",
+          question: "¿En qué áreas quieres enfocarte más?",
+          options: [
+            { label: "Pecho", value: "Pecho" },
+            { label: "Espalda", value: "Espalda" },
+            { label: "Piernas", value: "Piernas" },
+            { label: "Brazos", value: "Brazos" },
+            { label: "Hombros", value: "Hombros" },
+            { label: "Todo el cuerpo", value: "Todo el cuerpo" },
+          ],
+        },
+      ],
+      "Perder grasa": [
+        {
+          key: "current_weight",
+          question: "¿Cuál es tu peso actual?",
+          options: [
+            { label: "Menos de 60kg", value: "Menos de 60kg" },
+            { label: "60-70kg", value: "60-70kg" },
+            { label: "70-80kg", value: "70-80kg" },
+            { label: "80-90kg", value: "80-90kg" },
+            { label: "Más de 90kg", value: "Más de 90kg" },
+          ],
+        },
+        {
+          key: "cardio",
+          question: "¿Te gusta hacer cardio?",
+          options: [
+            { label: "Correr", value: "Correr" },
+            { label: "Caminar", value: "Caminar" },
+            { label: "Bicicleta", value: "Bicicleta" },
+            { label: "No me gusta el cardio", value: "No me gusta el cardio" },
+          ],
+        },
+      ],
+      "Mejorar condición física": [
+        {
+          key: "current_activity",
+          question: "¿Qué tipo de actividad física haces actualmente?",
+          options: [
+            { label: "Ninguna", value: "Ninguna" },
+            { label: "Caminar", value: "Caminar" },
+            { label: "Correr", value: "Correr" },
+            { label: "Deportes", value: "Deportes" },
+          ],
+        },
+        {
+          key: "cardio_preference",
+          question: "¿Prefieres cardio de alta o baja intensidad?",
+          options: [
+            { label: "Alta intensidad", value: "Alta intensidad" },
+            { label: "Baja intensidad", value: "Baja intensidad" },
+            { label: "Mixto", value: "Mixto" },
+          ],
+        },
+      ],
+      "Mantenerme en forma": [
+        {
+          key: "current_activity",
+          question: "¿Qué tipo de actividad física haces actualmente?",
+          options: [
+            { label: "Ninguna", value: "Ninguna" },
+            { label: "Caminar", value: "Caminar" },
+            { label: "Yoga", value: "Yoga" },
+            { label: "Deportes", value: "Deportes" },
+          ],
+        },
+        {
+          key: "goals",
+          question: "¿Qué es lo más importante para ti?",
+          options: [
+            { label: "Flexibilidad", value: "Flexibilidad" },
+            { label: "Salud general", value: "Salud general" },
+            { label: "Energía", value: "Energía" },
+            { label: "Equilibrio", value: "Equilibrio" },
+          ],
+        },
+      ],
+    };
+
+    return [...baseQuestions, ...(goalSpecificQuestions[goal] || [])];
+  };
+
+  const sendMessage = async (text?: string) => {
+    const textToSend = text || input.trim();
     if (!textToSend) {
+      shakeInput();
       return;
     }
 
-    setIsLoading(true);
-
-    const userMessage = { id: nextMessageId, sender: "user" as const, text: textToSend, timestamp: new Date() };
-
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      userMessage,
-    ]);
+    // Actualizar mensajes primero
+    const newUserMessage = { id: `u-${Date.now()}`, from: "user" as const, text: textToSend };
+    setMessages((prev) => [...prev, newUserMessage]);
     setInput("");
+    setIsLoading(true);
+    scrollToEnd();
 
+    // Manejo del flujo de conversación
+    if (conversationStep === "initial") {
+      // Verificar si el usuario seleccionó una de las opciones principales
+      const selectedOption = OPTIONS.find(opt => opt.title === textToSend);
+      if (selectedOption) {
+        setUserGoal(selectedOption.title);
+        setConversationStep("goal");
+        setUserResponses({ goal: selectedOption.title });
+        setShowOptions(false);
+
+        const questions = getQuestionsForGoal(selectedOption.title);
+        setCurrentQuestion(questions[0]);
+        setCurrentQuestionIndex(0);
+
+        setTimeout(() => {
+          setMessages((prev) => [
+            ...prev,
+            { id: `b-${Date.now()}`, from: "bot", text: `¡Excelente! Para crear tu rutina perfecta, necesito algunos datos.\n\n${questions[0].question}` },
+          ]);
+          setIsLoading(false);
+          scrollToEnd();
+        }, 500);
+        return;
+      }
+    }
+
+    if (conversationStep === "goal" || conversationStep === "details") {
+      const questions = getQuestionsForGoal(userGoal || "");
+      const answeredCount = Object.keys(userResponses).length - 1; // -1 porque goal ya está incluido
+
+      if (answeredCount < questions.length) {
+        // Guardar la respuesta
+        const currentQ = questions[answeredCount];
+        setUserResponses(prev => ({ ...prev, [currentQ.key]: textToSend }));
+
+        // Si hay más preguntas, hacer la siguiente
+        if (answeredCount + 1 < questions.length) {
+          const nextQuestion = questions[answeredCount + 1];
+          setCurrentQuestion(nextQuestion);
+          setCurrentQuestionIndex(answeredCount + 1);
+
+          setTimeout(() => {
+            setMessages((prev) => [
+              ...prev,
+              { id: `b-${Date.now()}`, from: "bot", text: nextQuestion.question },
+            ]);
+            setIsLoading(false);
+            scrollToEnd();
+          }, 500);
+          return;
+        } else {
+          // No hay más preguntas, mostrar resumen
+          setConversationStep("summary");
+          setCurrentQuestion(null);
+          setShowSummary(true);
+
+          setTimeout(() => {
+            setMessages((prev) => [
+              ...prev,
+              { id: `b-${Date.now()}`, from: "bot", text: "He recopilado toda la información necesaria." },
+            ]);
+            setIsLoading(false);
+            scrollToEnd();
+          }, 500);
+          return;
+        }
+      }
+    }
+
+    // Si estamos en modo completo o el usuario envió un mensaje normal, usar la API
     const historial = messages.map((m) => ({
-      role: (m.sender === "user" ? "user" : "assistant") as "user" | "assistant",
+      role: (m.from === "user" ? "user" : "assistant") as "user" | "assistant",
       content: m.text,
     }));
 
-    // Agregar la pregunta actual al historial
     historial.push({
       role: "user",
       content: textToSend,
@@ -133,295 +551,567 @@ export default function ChatbotScreen() {
       restricciones: profile?.restrictions,
     };
 
-    const response = await askSporti(historial, perfil);
+    let response;
+    if (conversationStep === "complete" && userGoal) {
+      // Generar el plan personalizado
+      const userProfile = {
+        objetivo: userGoal,
+        respuestas: userResponses,
+        perfil: perfil,
+      };
+      response = await askSporti(historial, userProfile);
+    } else {
+      response = await askSporti(historial, perfil);
+    }
 
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      {
-        id: nextMessageId + 1,
-        sender: "sporti",
-        text: response,
-        timestamp: new Date(),
-      },
+    setMessages((prev) => [
+      ...prev,
+      { id: `b-${Date.now()}`, from: "bot", text: response },
     ]);
     setIsLoading(false);
+    scrollToEnd();
+  };
+
+  const renderMessage = useCallback(({ item }: { item: Message }) => {
+    return (
+      <MessageBubble
+        item={item}
+        onCopy={copyMessage}
+        isCopied={copiedMessageId === item.id}
+      />
+    );
+  }, [copiedMessageId]);
+
+  const QuestionOptionButton = memo(({ option, index, onSelect }: { option: QuestionOption; index: number; onSelect: (value: string) => void }) => {
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(20)).current;
+
+    React.useEffect(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          delay: index * 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          delay: index * 50,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, [option.value, index]);
+
+    return (
+      <Animated.View
+        style={{
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        }}
+      >
+        <Pressable
+          onPress={() => onSelect(option.value)}
+          style={({ pressed }) => [
+            styles.questionOptionBtn,
+            pressed && styles.questionOptionPressed,
+          ]}
+        >
+          <Text style={styles.questionOptionText}>{option.label}</Text>
+        </Pressable>
+      </Animated.View>
+    );
+  });
+
+  const renderFooter = () => {
+    if (showSummary) {
+      return (
+        <View style={styles.summaryContainer}>
+          <Text style={styles.summaryTitle}>¡Listo {userName}! He creado tu rutina de entrenamiento y plan nutricional personalizado</Text>
+
+          <Pressable
+            style={styles.summaryCard}
+            onPress={() => {
+              // Navegar a la rutina
+              router.push("/routine");
+            }}
+          >
+            <View style={styles.summaryCardHeader}>
+              <Ionicons name="fitness" size={32} color={GREEN} />
+              <View style={styles.summaryCardHeaderText}>
+                <Text style={styles.summaryCardTitle}>Tu rutina de entrenamiento</Text>
+                <Text style={styles.summaryCardSubtitle}>{userResponses.days || "4"} días por semana</Text>
+              </View>
+            </View>
+            <View style={styles.summaryCardFooter}>
+              <Text style={styles.summaryCardButtonText}>Ver rutina completa</Text>
+              <Ionicons name="arrow-forward" size={20} color={GREEN} />
+            </View>
+          </Pressable>
+
+          <Pressable
+            style={styles.summaryCard}
+            onPress={() => {
+              // Navegar a nutrición
+              router.push("/nutrition");
+            }}
+          >
+            <View style={styles.summaryCardHeader}>
+              <Ionicons name="restaurant" size={32} color={GREEN} />
+              <View style={styles.summaryCardHeaderText}>
+                <Text style={styles.summaryCardTitle}>Tu plan de nutrición</Text>
+                <Text style={styles.summaryCardSubtitle}>Recetas y recomendaciones</Text>
+              </View>
+            </View>
+            <View style={styles.summaryCardFooter}>
+              <Text style={styles.summaryCardButtonText}>Ver plan de nutrición</Text>
+              <Ionicons name="arrow-forward" size={20} color={GREEN} />
+            </View>
+          </Pressable>
+
+          <Pressable
+            style={styles.continueChatBtn}
+            onPress={() => {
+              setShowSummary(false);
+              setConversationStep("complete");
+            }}
+          >
+            <Text style={styles.continueChatText}>Continuar chat con Sporti</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    if (showOptionsDelayed && showOptions) {
+      return (
+        <View style={styles.optionsWrapper}>
+          {dynamicOptions.map((opt, index) => (
+            <OptionCard key={opt.id} opt={opt} index={index} onSelect={sendMessage} />
+          ))}
+        </View>
+      );
+    }
+
+    if (showOptionsDelayed && currentQuestion && (conversationStep === "goal" || conversationStep === "details")) {
+      return (
+        <View style={styles.questionOptionsWrapper}>
+          {currentQuestion.options.map((opt, index) => (
+            <QuestionOptionButton key={opt.value} option={opt} index={index} onSelect={sendMessage} />
+          ))}
+        </View>
+      );
+    }
+
+    return null;
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
-        style={styles.screen}
+        style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
-        <View style={styles.container}>
-          <Animated.View
-            style={[
-              styles.headerContainer,
-              {
-                transform: [{ translateY: headerTranslateY }],
-                opacity: headerOpacity,
-              },
-            ]}
+        {/* Header */}
+        <View style={styles.header} accessible accessibilityRole="header">
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={12}
+            style={styles.backBtn}
+            accessibilityLabel="Volver atrás"
+            accessibilityRole="button"
           >
-            <View style={styles.header}>
-              <Image
-                source={require("../Imagen/Sporti.png")}
-                style={styles.headerImage}
-                resizeMode="contain"
-              />
-              <ThemedText style={styles.headerTitle}>Sporti</ThemedText>
-              <ThemedText style={styles.headerSubtitle}>
-                Tu asistente de fitness
-              </ThemedText>
-            </View>
-          </Animated.View>
+            <Ionicons name="arrow-undo" size={38} color={GREEN} />
+          </Pressable>
 
-          <Animated.ScrollView
-            style={styles.messages}
-            contentContainerStyle={styles.messagesContent}
-            showsVerticalScrollIndicator={true}
-            keyboardShouldPersistTaps="handled"
-            automaticallyAdjustKeyboardInsets
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-              { useNativeDriver: true }
-            )}
-            scrollEventThrottle={16}
-          >
-            <View style={styles.headerPlaceholder} />
-
-            <View style={styles.suggestionGrid}>
-              {quickActions.map((action, index) => (
-                <Pressable
-                  key={index}
-                  style={styles.suggestionCard}
-                  onPress={() => {
-                    const text = action;
-                    setInput(text);
-                    sendMessage(text);
-                  }}
-                  disabled={isLoading}
-                >
-                  <ThemedText style={styles.suggestionCardText}>
-                    {action}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-
-            {messages.map((message) => (
-              <View
-                key={message.id}
-                style={[
-                  styles.messageBubble,
-                  message.sender === "user"
-                    ? styles.userBubble
-                    : styles.sportiBubble,
-                ]}
-              >
-                <ThemedText
-                  style={[
-                    styles.messageText,
-                    message.sender === "user" && styles.userMessageText,
-                  ]}
-                >
-                  {String(message.text)}
-                </ThemedText>
-                <ThemedText
-                  style={[
-                    styles.messageTime,
-                    message.sender === "user" && styles.userMessageTime,
-                  ]}
-                >
-                  {formatTime(message.timestamp)}
-                </ThemedText>
-              </View>
-            ))}
-          </Animated.ScrollView>
-
-          <View style={styles.composer}>
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="Escribe tu pregunta..."
-              placeholderTextColor="#8F8F8F"
-              style={styles.input}
-              multiline
-              maxLength={500}
-              onSubmitEditing={() => sendMessage()}
-              accessibilityLabel="Pregunta para Sporti"
-              editable={!isLoading}
+          <View style={styles.avatar} accessibilityLabel="Avatar de Sporti">
+            <Image
+              source={require("../Imagen/Sporti.png")}
+              style={styles.avatarImg}
+              resizeMode="contain"
             />
-            {isLoading ? (
-              <View style={styles.loadingIndicator}>
-                <ThemedText style={styles.loadingText}>...</ThemedText>
-              </View>
-            ) : (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.sendButton,
-                  pressed && styles.sendButtonPressed,
-                ]}
-                onPress={() => sendMessage()}
-                accessibilityRole="button"
-                accessibilityLabel="Enviar pregunta"
-              >
-                <Ionicons name="send" size={19} color="#FFFFFF" />
-              </Pressable>
-            )}
           </View>
+
+          <View style={styles.headerTextBox}>
+            <Text style={styles.headerTitle}>Sporti</Text>
+            <Text style={styles.headerSubtitle}>Asistente virtual</Text>
+          </View>
+
+          <Pressable
+            onPress={clearChat}
+            hitSlop={12}
+            style={styles.clearBtn}
+            accessibilityLabel="Borrar historial del chat"
+            accessibilityRole="button"
+            accessibilityHint="Esto eliminará todos los mensajes del chat"
+          >
+            <Ionicons name="trash-outline" size={24} color={TEXT_MUTED} />
+          </Pressable>
         </View>
+
+        {/* Mensajes + opciones */}
+        <FlatList
+          ref={listRef}
+          data={messages}
+          keyExtractor={(m) => m.id}
+          renderItem={renderMessage}
+          ListFooterComponent={renderFooter}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={scrollToEnd}
+        />
+
+        {/* Input */}
+        <Animated.View
+          style={[
+            styles.inputBar,
+            {
+              transform: [{ translateX: shakeAnim }],
+              marginBottom: isKeyboardOpen ? 5 : 14,
+            },
+          ]}
+        >
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder="Escribe tu pregunta..."
+            placeholderTextColor="#555"
+            style={styles.input}
+            returnKeyType="send"
+            onSubmitEditing={() => sendMessage(input)}
+            editable={!isLoading}
+            accessibilityLabel="Campo de texto para escribir tu pregunta"
+            accessibilityHint="Escribe tu pregunta y presiona enviar"
+          />
+          {isLoading ? (
+            <Animated.View
+              style={styles.loadingBtn}
+              accessibilityLabel="Sporti está escribiendo"
+              accessibilityRole="text"
+            >
+              <Animated.Text
+                style={[
+                  styles.loadingText,
+                  {
+                    opacity: loadingAnim,
+                  },
+                ]}
+              >
+                ...
+              </Animated.Text>
+            </Animated.View>
+          ) : (
+            <Pressable
+              onPress={() => sendMessage(input)}
+              style={({ pressed }) => [
+                styles.sendBtn,
+                pressed && { backgroundColor: GREEN_DARK },
+              ]}
+              accessibilityLabel="Enviar mensaje"
+              accessibilityRole="button"
+              accessibilityHint="Envía tu pregunta a Sporti"
+            >
+              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+            </Pressable>
+          )}
+        </Animated.View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  safe: {
     flex: 1,
-    backgroundColor: "#090A0A",
+    backgroundColor: "#FFFFFF",
   },
-  screen: {
-    flex: 1,
-    backgroundColor: "#0B0C0C",
-  },
-  container: {
+  flex: {
     flex: 1,
   },
-  headerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    backgroundColor: "#0C0D0D",
-    borderBottomWidth: 1,
-    borderBottomColor: "#1E2B29",
-  },
+
+  /* Header */
   header: {
-    padding: 20,
+    flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
-  headerPlaceholder: {
-    height: 140,
+  backBtn: {
+    marginRight: 14,
   },
-  headerImage: {
-    width: 100,
-    height: 100,
-    marginBottom: 12,
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: GREEN,
+    backgroundColor: "#0B0B0B",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImg: {
+    width: "100%",
+    height: "100%",
+  },
+  headerTextBox: {
+    marginLeft: 12,
   },
   headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "800",
-    marginBottom: 4,
+    color: GREEN,
+    lineHeight: 28,
   },
   headerSubtitle: {
-    color: "#D6D6D6",
-    fontSize: 14,
+    fontSize: 13,
+    color: TEXT_DARK,
   },
-  messages: {
-    flex: 1,
+  clearBtn: {
+    marginLeft: "auto",
+    padding: 8,
   },
-  messagesContent: {
-    padding: 14,
-    flexGrow: 1,
+
+  /* Lista */
+  listContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 20,
   },
-  suggestionGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 16,
-  },
-  suggestionCard: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "#1A1D1D",
-    borderWidth: 1,
-    borderColor: "#2A2B2B",
-  },
-  suggestionCardText: {
-    color: "#D7D7D7",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  messageBubble: {
-    maxWidth: "80%",
-    padding: 12,
+
+  /* Burbujas */
+  bubble: {
+    maxWidth: "92%",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderRadius: 16,
-    marginBottom: 8,
+    marginBottom: 14,
   },
-  sportiBubble: {
+  botBubble: {
     alignSelf: "flex-start",
-    backgroundColor: "#202121",
-    borderBottomLeftRadius: 4,
+    backgroundColor: BUBBLE_BG,
   },
   userBubble: {
     alignSelf: "flex-end",
-    backgroundColor: "#D92D55",
-    borderBottomRightRadius: 4,
+    backgroundColor: GREEN,
   },
-  messageText: {
-    color: "#FFFFFF",
+  bubbleText: {
     fontSize: 15,
     lineHeight: 21,
+    color: TEXT_DARK,
   },
-  userMessageText: {
+  userBubbleText: {
     color: "#FFFFFF",
   },
-  messageTime: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    marginTop: 4,
-    alignSelf: "flex-end",
+  copyBtn: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
+    padding: 4,
   },
-  userMessageTime: {
-    color: "#FFFFFF",
+
+  /* Opciones */
+  optionsWrapper: {
+    paddingHorizontal: 6,
+    marginTop: 2,
   },
-  composer: {
+  optionCard: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    padding: 12,
+    alignItems: "center",
+    backgroundColor: BUBBLE_BG,
+    borderWidth: 1.2,
+    borderColor: GREEN,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    // sombra iOS
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    // sombra Android
+    elevation: 4,
+  },
+  optionPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
+  optionIconBox: {
+    width: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  optionTextBox: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: TEXT_DARK,
+    marginBottom: 4,
+  },
+  optionSubtitle: {
+    fontSize: 14,
+    color: TEXT_MUTED,
+  },
+
+  /* Opciones de preguntas */
+  questionOptionsWrapper: {
+    paddingHorizontal: 12,
+    marginTop: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  questionOptionBtn: {
+    backgroundColor: BUBBLE_BG,
+    borderWidth: 1.2,
+    borderColor: GREEN,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    // sombra iOS
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    // sombra Android
+    elevation: 2,
+  },
+  questionOptionPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.97 }],
+  },
+  questionOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEXT_DARK,
+  },
+
+  /* Resumen */
+  summaryContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    backgroundColor: "#FFFFFF",
+  },
+  summaryTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: TEXT_DARK,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  summaryCard: {
+    backgroundColor: BUBBLE_BG,
+    borderWidth: 1.5,
+    borderColor: GREEN,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    // sombra iOS
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    // sombra Android
+    elevation: 3,
+  },
+  summaryCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  summaryCardHeaderText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  summaryCardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: TEXT_DARK,
+    marginBottom: 4,
+  },
+  summaryCardSubtitle: {
+    fontSize: 14,
+    color: TEXT_MUTED,
+  },
+  summaryCardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#292A2A",
-    backgroundColor: "#111212",
+    borderTopColor: "#D0D0D0",
+  },
+  summaryCardButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: GREEN,
+    marginRight: 8,
+  },
+  continueChatBtn: {
+    marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: GREEN,
+    alignItems: "center",
+    // sombra iOS
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    // sombra Android
+    elevation: 4,
+  },
+  continueChatText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+
+  /* Input */
+  inputBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginBottom: -15,
+    marginTop: 0,
+    paddingLeft: 18,
+    paddingRight: 8,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1.2,
+    borderColor: GREEN,
+    backgroundColor: "#F3F3F3",
   },
   input: {
     flex: 1,
-    minHeight: 44,
-    maxHeight: 110,
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    color: "#FFFFFF",
-    backgroundColor: "#242525",
     fontSize: 15,
+    color: TEXT_DARK,
+    paddingVertical: 0,
   },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  sendBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#1F7A2E",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#D92D55",
-    marginLeft: 8,
   },
-  sendButtonPressed: {
-    opacity: 0.8,
-  },
-  loadingIndicator: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  loadingBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F3F3F3",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#242525",
-    marginLeft: 8,
   },
   loadingText: {
-    color: "#0FBE76",
+    color: GREEN,
     fontSize: 16,
     fontWeight: "600",
   },
