@@ -5,6 +5,7 @@ import {
     StyleSheet,
     View
 } from "react-native";
+import { ThemedText } from "./themed-text";
 import { SportGymColors } from "../constants/theme";
 
 const GREEN = SportGymColors.primary;
