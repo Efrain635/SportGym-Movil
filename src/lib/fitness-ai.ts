@@ -13,6 +13,7 @@ export type ClientProfile = {
   weight?: number | null;
   height?: number | null;
   age?: number | null;
+  gender?: string | null;
 };
 
 const normalize = (value: string | undefined | null, fallback: string) => {
@@ -38,6 +39,7 @@ export function buildFitnessCoachPrompt(
   const weight = currentProfile.weight ?? 70;
   const height = currentProfile.height ?? 170;
   const age = currentProfile.age ?? 25;
+  const gender = currentProfile.gender ?? "no especificado";
   const restrictions = currentProfile.restrictions?.length
     ? currentProfile.restrictions.join(", ")
     : "ninguna";
@@ -47,14 +49,15 @@ export function buildFitnessCoachPrompt(
 Tu objetivo es ayudar a ${name} con una rutina personalizada y segura.
 
 Perfil del usuario:
-- objetivo: ${goal}
-- nivel actual: ${level}
-- edad: ${age}
-- peso: ${weight} kg
-- altura: ${height} cm
-- días de entrenamiento por semana: ${days}
-- máquinas disponibles: ${gymMachines}
-- restricciones: ${restrictions}
+|- objetivo: ${goal}
+|- nivel actual: ${level}
+|- edad: ${age}
+|- género: ${gender}
+|- peso: ${weight} kg
+|- altura: ${height} cm
+|- días de entrenamiento por semana: ${days}
+|- máquinas disponibles: ${gymMachines}
+|- restricciones: ${restrictions}
 
 Reglas:
 1. Ajusta la rutina según el nivel del usuario y su objetivo.
