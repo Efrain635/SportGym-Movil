@@ -196,9 +196,11 @@ export default function HomeView() {
                 </ThemedText>
               </View>
               <View style={styles.headerActions}>
-                <View
+                <Pressable
                   style={styles.notificationButton}
+                  onPress={() => router.push('/(tabs)/notifications')}
                   accessible
+                  accessibilityRole="button"
                   accessibilityLabel="Notificaciones"
                 >
                   <Ionicons
@@ -206,7 +208,7 @@ export default function HomeView() {
                     size={19}
                     color={SportGymColors.primary}
                   />
-                </View>
+                </Pressable>
                 <Pressable
                   style={styles.profileButton}
                   onPress={() => router.push('/(tabs)/profile')}
