@@ -32,8 +32,8 @@ export const DEFAULT_TABS: HeaderTab[] = [
   {
     key: "tienda",
     label: "Tienda",
-    icon: "flask",
-    iconOutline: "flask-outline",
+    icon: "storefront",
+    iconOutline: "storefront-outline",
   },
   {
     key: "nutricion",
@@ -74,11 +74,15 @@ export function AnimatedBottomNav({
               onPress={() => select(i)}
               hitSlop={4}
             >
-              <Ionicons
-                name={isActive ? tab.icon : tab.iconOutline}
-                size={26}
-                color={isActive ? "#FFFFFF" : MUTED}
-              />
+              {tab.key === "tienda" ? (
+                <ProteinTubIcon color={isActive ? "#FFFFFF" : MUTED} />
+              ) : (
+                <Ionicons
+                  name={isActive ? tab.icon : tab.iconOutline}
+                  size={26}
+                  color={isActive ? "#FFFFFF" : MUTED}
+                />
+              )}
               <ThemedText
                 style={[
                   styles.label,
@@ -90,6 +94,17 @@ export function AnimatedBottomNav({
             </Pressable>
           );
         })}
+      </View>
+    </View>
+  );
+}
+
+function ProteinTubIcon({ color }: { color: string }) {
+  return (
+    <View style={styles.proteinIcon}>
+      <View style={[styles.proteinTubLid, { backgroundColor: color }]} />
+      <View style={[styles.proteinTubBody, { borderColor: color }]}>
+        <View style={[styles.proteinTubLabel, { backgroundColor: color }]} />
       </View>
     </View>
   );
@@ -133,5 +148,32 @@ const styles = StyleSheet.create({
   },
   labelActive: {
     color: "#FFFFFF",
+  },
+  proteinIcon: {
+    width: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proteinTubLid: {
+    position: "absolute",
+    top: 2,
+    width: 15,
+    height: 4,
+    borderRadius: 2,
+  },
+  proteinTubBody: {
+    width: 17,
+    height: 18,
+    marginTop: 5,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderRadius: 4,
+  },
+  proteinTubLabel: {
+    width: 9,
+    height: 2,
+    borderRadius: 1,
   },
 });
