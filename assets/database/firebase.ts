@@ -20,12 +20,14 @@ import {
     getDocs,
     initializeFirestore,
     limit,
+    orderBy,
     query,
     runTransaction,
     serverTimestamp,
     setDoc,
     updateDoc,
     where,
+    writeBatch,
     type DocumentData,
     type QueryDocumentSnapshot,
 } from "firebase/firestore";
@@ -238,6 +240,194 @@ export type SavedRoutineExercise = {
   seriesAsignadas?: number;
   repeticionesAsignadas?: number;
 };
+
+export type GeneratedRoutineExercise = Omit<SavedRoutineExercise, "id">;
+
+export type ChatConversationMessage = {
+  id: string;
+  from: "bot" | "user";
+  text: string;
+};
+
+export type ChatConversation = {
+  id: string;
+  title: string;
+  updatedAt?: unknown;
+  messages?: ChatConversationMessage[];
+  goal?: string | null;
+  responses?: Record<string, string>;
+  step?: "initial" | "goal" | "details" | "complete" | "summary";
+  showSummary?: boolean;
+};
+
+const chatConversationsCollection = collection(db, "conversaciones_chatbot");
+const chatMessagesCollection = (conversationId: string) =>
+  collection(db, "conversaciones_chatbot", conversationId, "mensajes");
+
+export async function getClientChatConversations(clientId: string) {
+  const conversationsQuery = query(
+    chatConversationsCollection,
+    where("clienteId", "==", clientId),
+  );
+  const snapshot = await getDocs(conversationsQuery);
+
+  return snapshot.docs
+    .map((conversation) => {
+      const data = conversation.data();
+      return {
+        id: conversation.id,
+        title:
+          typeof data.titulo === "string" && data.titulo.trim()
+            ? data.titulo
+            : "Conversación",
+        updatedAt: data.fechaActualizacion,
+        goal: typeof data.objetivo === "string" ? data.objetivo : null,
+        responses:
+          data.respuestas && typeof data.respuestas === "object"
+            ? (data.respuestas as Record<string, string>)
+            : {},
+        step:
+          typeof data.paso === "string"
+            ? (data.paso as ChatConversation["step"])
+            : "initial",
+        showSummary: data.resumenVisible === true,
+      };
+    })
+    .sort((left, right) => {
+      const leftTime =
+        typeof left.updatedAt === "object" &&
+        left.updatedAt !== null &&
+        "toMillis" in left.updatedAt &&
+        typeof left.updatedAt.toMillis === "function"
+          ? left.updatedAt.toMillis()
+          : 0;
+      const rightTime =
+        typeof right.updatedAt === "object" &&
+        right.updatedAt !== null &&
+        "toMillis" in right.updatedAt &&
+        typeof right.updatedAt.toMillis === "function"
+          ? right.updatedAt.toMillis()
+          : 0;
+      return rightTime - leftTime;
+    });
+}
+
+export async function createClientChatConversation(
+  clientId: string,
+  title: string,
+) {
+  const reference = await addDoc(chatConversationsCollection, {
+    clienteId: clientId,
+    titulo: title,
+    objetivo: null,
+    respuestas: {},
+    paso: "initial",
+    resumenVisible: false,
+    fechaCreacion: serverTimestamp(),
+    fechaActualizacion: serverTimestamp(),
+  });
+
+  return reference.id;
+}
+
+export async function getChatConversationMessages(conversationId: string) {
+  const messagesQuery = query(
+    chatMessagesCollection(conversationId),
+    orderBy("fechaCreacion", "asc"),
+  );
+  const snapshot = await getDocs(messagesQuery);
+
+  return snapshot.docs.map((message) => ({
+    id: message.id,
+    from: message.data().from,
+    text: message.data().text,
+  })) as ChatConversationMessage[];
+}
+
+export async function saveChatConversationMessage(
+  conversationId: string,
+  message: Omit<ChatConversationMessage, "id">,
+) {
+  const conversationReference = doc(
+    db,
+    "conversaciones_chatbot",
+    conversationId,
+  );
+  const conversationSnapshot = await getDoc(conversationReference);
+  const batch = writeBatch(db);
+  const messageReference = doc(chatMessagesCollection(conversationId));
+
+  batch.set(messageReference, {
+    ...message,
+    fechaCreacion: serverTimestamp(),
+  });
+  const conversationUpdate: Record<string, unknown> = {
+    fechaActualizacion: serverTimestamp(),
+  };
+  if (
+    message.from === "user" &&
+    conversationSnapshot.data()?.titulo === "Nueva conversación"
+  ) {
+    conversationUpdate.titulo = message.text.slice(0, 60);
+  }
+  batch.update(conversationReference, conversationUpdate);
+  await batch.commit();
+}
+
+export async function updateChatConversation(
+  conversationId: string,
+  state: {
+    goal: string | null;
+    responses: Record<string, string>;
+    step: "initial" | "goal" | "details" | "complete" | "summary";
+    showSummary: boolean;
+  },
+) {
+  await updateDoc(doc(db, "conversaciones_chatbot", conversationId), {
+    objetivo: state.goal,
+    respuestas: state.responses,
+    paso: state.step,
+    resumenVisible: state.showSummary,
+    fechaActualizacion: serverTimestamp(),
+  });
+}
+
+export async function saveGeneratedRoutine(
+  clientId: string,
+  clientUsername: string,
+  clientName: string,
+  exercises: GeneratedRoutineExercise[],
+) {
+  const batch = writeBatch(db);
+
+  for (const exercise of exercises) {
+    const routineId = getRoutineDocumentId(
+      clientId,
+      exercise.ejercicioId,
+      exercise.dia,
+    );
+    batch.set(
+      doc(db, "rutinas", routineId),
+      {
+        clienteId: clientId,
+        clienteUsuario: clientUsername,
+        clienteNombre: clientName,
+        ejercicioId: exercise.ejercicioId,
+        ejercicioNombre: exercise.ejercicioNombre,
+        dia: exercise.dia,
+        equipo: exercise.equipo,
+        grupoMuscular: exercise.grupoMuscular,
+        categoria: exercise.categoria,
+        seriesAsignadas: exercise.seriesAsignadas,
+        repeticionesAsignadas: exercise.repeticionesAsignadas,
+        fechaActualizacion: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+
+  await batch.commit();
+}
 
 export type SavedFavoriteExercise = {
   id: string;

@@ -3,6 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   FlatList,
   Image,
@@ -17,7 +18,21 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import {
+  createClientChatConversation,
+  getChatConversationMessages,
+  getClientChatConversations,
+  saveChatConversationMessage,
+  saveGeneratedRoutine,
+  updateChatConversation,
+  type ChatConversation,
+} from "../../assets/database/firebase";
 import { useAuth } from "../contexts/AuthContext";
+import {
+  createChatbotRoutine,
+  formatChatbotRoutine,
+  getCardioRecommendation,
+} from "../lib/chatbot-routines";
 import { type ClientProfile } from "../lib/fitness-ai";
 import { askSporti } from "../lib/sporti-groq";
 
@@ -81,6 +96,9 @@ const OPTIONS: Option[] = [
 export default function ChatbotScreen() {
   const { user } = useAuth();
   const listRef = useRef<FlatList<Message>>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const userName = useMemo(() => {
     const firstName = user?.firstName || "";
@@ -189,7 +207,7 @@ export default function ChatbotScreen() {
     setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
-  const clearChat = () => {
+  const resetConversationState = () => {
     setMessages([initialMessage]);
     setShowOptions(true);
     setUserGoal(null);
@@ -445,6 +463,146 @@ export default function ChatbotScreen() {
     return [...baseQuestions, ...(goalSpecificQuestions[goal] || [])];
   };
 
+  const persistConversationState = async (
+    id: string,
+    step = conversationStep,
+    goal = userGoal,
+    responses = userResponses,
+    summary = showSummary,
+  ) => {
+    if (!id) return;
+    try {
+      await updateChatConversation(id, {
+        goal,
+        responses,
+        step,
+        showSummary: summary,
+      });
+    } catch (error) {
+      console.error("No se pudo guardar el estado de la conversación:", error);
+      Alert.alert(
+        "No se guardó el progreso",
+        "Revisa tu conexión e inténtalo de nuevo.",
+      );
+    }
+  };
+
+  const persistMessage = async (
+    id: string | null,
+    message: Message,
+  ) => {
+    if (!id) return;
+    try {
+      await saveChatConversationMessage(id, {
+        from: message.from,
+        text: message.text,
+      });
+    } catch (error) {
+      console.error("No se pudo guardar el mensaje del chatbot:", error);
+      Alert.alert(
+        "No se guardó el mensaje",
+        "El chat sigue disponible, pero este mensaje no quedó en el historial.",
+      );
+    }
+  };
+
+  const startNewConversation = async () => {
+    resetConversationState();
+    setShowHistory(false);
+    setConversationId(null);
+    if (!user?.clientId) return;
+
+    try {
+      const id = await createClientChatConversation(
+        user.clientId,
+        "Nueva conversación",
+      );
+      setConversationId(id);
+      setConversations((current) => [
+        {
+          id,
+          title: "Nueva conversación",
+          goal: null,
+          responses: {},
+          step: "initial",
+          showSummary: false,
+        },
+        ...current,
+      ]);
+      await persistMessage(id, initialMessage);
+    } catch (error) {
+      console.error("No se pudo crear una conversación:", error);
+      Alert.alert(
+        "No se pudo iniciar un chat nuevo",
+        "Revisa tu conexión e inténtalo de nuevo.",
+      );
+    }
+  };
+
+  const openConversation = async (conversation: ChatConversation) => {
+    try {
+      const loadedMessages = await getChatConversationMessages(conversation.id);
+      const restoredStep = conversation.step ?? "initial";
+      const restoredGoal = conversation.goal ?? null;
+      const restoredResponses = conversation.responses ?? {};
+      const questions = getQuestionsForGoal(restoredGoal ?? "");
+      const answeredCount = Math.max(
+        0,
+        Object.keys(restoredResponses).filter((key) => key !== "goal").length,
+      );
+
+      setConversationId(conversation.id);
+      setMessages(loadedMessages.length ? loadedMessages : [initialMessage]);
+      setUserGoal(restoredGoal);
+      setUserResponses(restoredResponses);
+      setConversationStep(restoredStep);
+      setShowSummary(conversation.showSummary === true);
+      setShowOptions(restoredStep === "initial");
+      setCurrentQuestion(
+        restoredStep === "goal" || restoredStep === "details"
+          ? questions[answeredCount] ?? null
+          : null,
+      );
+      setCurrentQuestionIndex(answeredCount);
+      setShowHistory(false);
+      scrollToEnd();
+    } catch (error) {
+      console.error("No se pudo cargar la conversación:", error);
+      Alert.alert(
+        "No se pudo abrir la conversación",
+        "Revisa tu conexión e inténtalo de nuevo.",
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!user?.clientId) return;
+
+    let isCurrent = true;
+    const loadRecentConversation = async () => {
+      try {
+        const savedConversations = await getClientChatConversations(
+          user.clientId!,
+        );
+        if (!isCurrent) return;
+        setConversations(savedConversations);
+      } catch (error) {
+        console.error("No se pudo cargar el historial del chatbot:", error);
+        if (isCurrent) {
+          Alert.alert(
+            "No se pudo cargar el historial",
+            "Revisa tu conexión e inténtalo de nuevo.",
+          );
+        }
+      }
+    };
+
+    void loadRecentConversation();
+    return () => {
+      isCurrent = false;
+    };
+  }, [user?.clientId]);
+
   const sendMessage = async (text?: string) => {
     const textToSend = text || input.trim();
     if (!textToSend) {
@@ -452,9 +610,54 @@ export default function ChatbotScreen() {
       return;
     }
 
+    let activeConversationId = conversationId;
+    if (!activeConversationId && user?.clientId) {
+      try {
+        activeConversationId = await createClientChatConversation(
+          user.clientId,
+          textToSend.slice(0, 60),
+        );
+        setConversationId(activeConversationId);
+        setConversations((current) => [
+          {
+            id: activeConversationId!,
+            title: textToSend.slice(0, 60),
+            goal: null,
+            responses: {},
+            step: "initial",
+            showSummary: false,
+          },
+          ...current,
+        ]);
+      } catch (error) {
+        console.error("No se pudo crear la conversación:", error);
+        Alert.alert(
+          "No se pudo guardar el chat",
+          "Revisa tu conexión e inténtalo de nuevo.",
+        );
+      }
+    }
+
     // Actualizar mensajes primero
     const newUserMessage = { id: `u-${Date.now()}`, from: "user" as const, text: textToSend };
     setMessages((prev) => [...prev, newUserMessage]);
+    await persistMessage(activeConversationId, newUserMessage);
+    if (
+      activeConversationId &&
+      conversations.some(
+        (conversation) =>
+          conversation.id === activeConversationId &&
+          conversation.title === "Nueva conversación",
+      )
+    ) {
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === activeConversationId
+            ? { ...conversation, title: textToSend.slice(0, 60) }
+            : conversation,
+        ),
+      );
+    }
     setInput("");
     setIsLoading(true);
     scrollToEnd();
@@ -473,11 +676,21 @@ export default function ChatbotScreen() {
         setCurrentQuestion(questions[0]);
         setCurrentQuestionIndex(0);
 
-        setTimeout(() => {
-          setMessages((prev) => [
-            ...prev,
-            { id: `b-${Date.now()}`, from: "bot", text: `¡Excelente! Para crear tu rutina perfecta, necesito algunos datos.\n\n${questions[0].question}` },
-          ]);
+        setTimeout(async () => {
+          const botMessage = {
+            id: `b-${Date.now()}`,
+            from: "bot" as const,
+            text: `¡Excelente! Para crear tu rutina perfecta, necesito algunos datos.\n\n${questions[0].question}`,
+          };
+          setMessages((prev) => [...prev, botMessage]);
+          await persistMessage(activeConversationId, botMessage);
+          await persistConversationState(
+            activeConversationId ?? "",
+            "goal",
+            selectedOption.title,
+            { goal: selectedOption.title },
+            false,
+          );
           setIsLoading(false);
           scrollToEnd();
         }, 500);
@@ -492,7 +705,8 @@ export default function ChatbotScreen() {
       if (answeredCount < questions.length) {
         // Guardar la respuesta
         const currentQ = questions[answeredCount];
-        setUserResponses(prev => ({ ...prev, [currentQ.key]: textToSend }));
+        const updatedResponses = { ...userResponses, [currentQ.key]: textToSend };
+        setUserResponses(updatedResponses);
 
         // Si hay más preguntas, hacer la siguiente
         if (answeredCount + 1 < questions.length) {
@@ -500,29 +714,93 @@ export default function ChatbotScreen() {
           setCurrentQuestion(nextQuestion);
           setCurrentQuestionIndex(answeredCount + 1);
 
-          setTimeout(() => {
-            setMessages((prev) => [
-              ...prev,
-              { id: `b-${Date.now()}`, from: "bot", text: nextQuestion.question },
-            ]);
+          setTimeout(async () => {
+            const botMessage = {
+              id: `b-${Date.now()}`,
+              from: "bot" as const,
+              text: nextQuestion.question,
+            };
+            setMessages((prev) => [...prev, botMessage]);
+            await persistMessage(activeConversationId, botMessage);
+            await persistConversationState(
+              activeConversationId ?? "",
+              "goal",
+              userGoal,
+              updatedResponses,
+              false,
+            );
             setIsLoading(false);
             scrollToEnd();
           }, 500);
           return;
         } else {
-          // No hay más preguntas, mostrar resumen
+          const routine = createChatbotRoutine({
+            goal: userGoal ?? "Mantenerme en forma",
+            daysAnswer: updatedResponses.days ?? "4 días",
+            durationAnswer: updatedResponses.duration ?? "60 minutos",
+            focus: updatedResponses.focus,
+            restriction: updatedResponses.injuries,
+            level:
+              profile?.level ??
+              (updatedResponses.current_activity === "Ninguna"
+                ? "principiante"
+                : undefined),
+          });
+          const restSeconds =
+            userGoal === "Ganar masa muscular" ? 90 : 60;
+          let routineSaved = false;
+          if (user?.clientId && routine.length > 0) {
+            try {
+              await saveGeneratedRoutine(
+                user.clientId,
+                user.username,
+                `${user.firstName} ${user.lastName}`.trim(),
+                routine,
+              );
+              routineSaved = true;
+            } catch (error) {
+              console.error("No se pudo guardar la rutina generada:", error);
+              Alert.alert(
+                "No se guardó la rutina",
+                "Sporti generó el plan, pero no se guardó en Mi rutina. Revisa tu conexión e inténtalo de nuevo.",
+              );
+            }
+          } else if (!user?.clientId) {
+            Alert.alert(
+              "Rutina no guardada",
+              "Inicia sesión como cliente para guardar la rutina y editarla en Mi rutina.",
+            );
+          }
+
+          const routineText = formatChatbotRoutine(
+            routine,
+            restSeconds,
+            getCardioRecommendation(
+              userGoal ?? "",
+              updatedResponses,
+              profile?.level,
+            ),
+            routineSaved,
+          );
           setConversationStep("summary");
           setCurrentQuestion(null);
           setShowSummary(true);
-
-          setTimeout(() => {
-            setMessages((prev) => [
-              ...prev,
-              { id: `b-${Date.now()}`, from: "bot", text: "He recopilado toda la información necesaria." },
-            ]);
-            setIsLoading(false);
-            scrollToEnd();
-          }, 500);
+          const botMessage = {
+            id: `b-${Date.now()}`,
+            from: "bot" as const,
+            text: routineText,
+          };
+          setMessages((prev) => [...prev, botMessage]);
+          await persistMessage(activeConversationId, botMessage);
+          await persistConversationState(
+            activeConversationId ?? "",
+            "summary",
+            userGoal,
+            updatedResponses,
+            true,
+          );
+          setIsLoading(false);
+          scrollToEnd();
           return;
         }
       }
@@ -551,23 +829,14 @@ export default function ChatbotScreen() {
       restricciones: profile?.restrictions,
     };
 
-    let response;
-    if (conversationStep === "complete" && userGoal) {
-      // Generar el plan personalizado
-      const userProfile = {
-        objetivo: userGoal,
-        respuestas: userResponses,
-        perfil: perfil,
-      };
-      response = await askSporti(historial, userProfile);
-    } else {
-      response = await askSporti(historial, perfil);
-    }
-
-    setMessages((prev) => [
-      ...prev,
-      { id: `b-${Date.now()}`, from: "bot", text: response },
-    ]);
+    const response = await askSporti(historial, {
+      ...perfil,
+      objetivo: userGoal ?? perfil.objetivo,
+      respuestas: userResponses,
+    });
+    const botMessage = { id: `b-${Date.now()}`, from: "bot" as const, text: response };
+    setMessages((prev) => [...prev, botMessage]);
+    await persistMessage(activeConversationId, botMessage);
     setIsLoading(false);
     scrollToEnd();
   };
@@ -627,44 +896,23 @@ export default function ChatbotScreen() {
     if (showSummary) {
       return (
         <View style={styles.summaryContainer}>
-          <Text style={styles.summaryTitle}>¡Listo {userName}! He creado tu rutina de entrenamiento y plan nutricional personalizado</Text>
+          <Text style={styles.summaryTitle}>¡Listo {userName}! Tu rutina personalizada está preparada</Text>
 
           <Pressable
             style={styles.summaryCard}
             onPress={() => {
-              // Navegar a la rutina
-              router.push("/routine");
+              router.navigate("/(tabs)/routine");
             }}
           >
             <View style={styles.summaryCardHeader}>
               <Ionicons name="fitness" size={32} color={GREEN} />
               <View style={styles.summaryCardHeaderText}>
-                <Text style={styles.summaryCardTitle}>Tu rutina de entrenamiento</Text>
+                <Text style={styles.summaryCardTitle}>Tu rutina editable</Text>
                 <Text style={styles.summaryCardSubtitle}>{userResponses.days || "4"} días por semana</Text>
               </View>
             </View>
             <View style={styles.summaryCardFooter}>
-              <Text style={styles.summaryCardButtonText}>Ver rutina completa</Text>
-              <Ionicons name="arrow-forward" size={20} color={GREEN} />
-            </View>
-          </Pressable>
-
-          <Pressable
-            style={styles.summaryCard}
-            onPress={() => {
-              // Navegar a nutrición
-              router.push("/nutrition");
-            }}
-          >
-            <View style={styles.summaryCardHeader}>
-              <Ionicons name="restaurant" size={32} color={GREEN} />
-              <View style={styles.summaryCardHeaderText}>
-                <Text style={styles.summaryCardTitle}>Tu plan de nutrición</Text>
-                <Text style={styles.summaryCardSubtitle}>Recetas y recomendaciones</Text>
-              </View>
-            </View>
-            <View style={styles.summaryCardFooter}>
-              <Text style={styles.summaryCardButtonText}>Ver plan de nutrición</Text>
+              <Text style={styles.summaryCardButtonText}>Editar en Mi rutina</Text>
               <Ionicons name="arrow-forward" size={20} color={GREEN} />
             </View>
           </Pressable>
@@ -674,6 +922,15 @@ export default function ChatbotScreen() {
             onPress={() => {
               setShowSummary(false);
               setConversationStep("complete");
+              if (conversationId) {
+                void persistConversationState(
+                  conversationId,
+                  "complete",
+                  userGoal,
+                  userResponses,
+                  false,
+                );
+              }
             }}
           >
             <Text style={styles.continueChatText}>Continuar chat con Sporti</Text>
@@ -738,14 +995,23 @@ export default function ChatbotScreen() {
           </View>
 
           <Pressable
-            onPress={clearChat}
+            onPress={() => setShowHistory(true)}
             hitSlop={12}
             style={styles.clearBtn}
-            accessibilityLabel="Borrar historial del chat"
+            accessibilityLabel="Ver historial de conversaciones"
             accessibilityRole="button"
-            accessibilityHint="Esto eliminará todos los mensajes del chat"
           >
-            <Ionicons name="trash-outline" size={24} color={TEXT_MUTED} />
+            <Ionicons name="chatbubbles-outline" size={23} color={TEXT_MUTED} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => void startNewConversation()}
+            hitSlop={12}
+            style={styles.newChatBtn}
+            accessibilityLabel="Iniciar conversación nueva"
+            accessibilityRole="button"
+          >
+            <Ionicons name="add-circle-outline" size={25} color={TEXT_MUTED} />
           </Pressable>
         </View>
 
@@ -815,6 +1081,54 @@ export default function ChatbotScreen() {
             </Pressable>
           )}
         </Animated.View>
+
+        {showHistory ? (
+          <View style={styles.historyOverlay}>
+            <View style={styles.historyHeader}>
+              <Text style={styles.historyTitle}>Tus conversaciones</Text>
+              <Pressable
+                onPress={() => setShowHistory(false)}
+                accessibilityLabel="Cerrar historial"
+                hitSlop={10}
+              >
+                <Ionicons name="close" size={24} color={TEXT_DARK} />
+              </Pressable>
+            </View>
+            <Pressable
+              style={styles.historyNewButton}
+              onPress={() => void startNewConversation()}
+            >
+              <Ionicons name="add" size={20} color="#FFFFFF" />
+              <Text style={styles.historyNewButtonText}>Nueva conversación</Text>
+            </Pressable>
+            <FlatList
+              data={conversations}
+              keyExtractor={(conversation) => conversation.id}
+              ListEmptyComponent={
+                <Text style={styles.historyEmpty}>
+                  Todavía no tienes conversaciones guardadas.
+                </Text>
+              }
+              renderItem={({ item }) => (
+                <Pressable
+                  style={[
+                    styles.historyItem,
+                    item.id === conversationId && styles.historyItemActive,
+                  ]}
+                  onPress={() => void openConversation(item)}
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={20} color={GREEN} />
+                  <Text style={styles.historyItemText} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                  {item.id === conversationId ? (
+                    <Ionicons name="checkmark-circle" size={18} color={GREEN} />
+                  ) : null}
+                </Pressable>
+              )}
+            />
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -871,6 +1185,72 @@ const styles = StyleSheet.create({
   clearBtn: {
     marginLeft: "auto",
     padding: 8,
+  },
+  newChatBtn: {
+    marginLeft: 2,
+    padding: 8,
+  },
+  historyOverlay: {
+    position: "absolute",
+    zIndex: 10,
+    top: 84,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    backgroundColor: "#FFFFFF",
+  },
+  historyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  historyTitle: {
+    color: TEXT_DARK,
+    fontSize: 21,
+    fontWeight: "800",
+  },
+  historyNewButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: GREEN,
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+  historyNewButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  historyItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    marginBottom: 8,
+    borderRadius: 10,
+    backgroundColor: "#F4F4F4",
+  },
+  historyItemActive: {
+    borderWidth: 1,
+    borderColor: GREEN,
+  },
+  historyItemText: {
+    flex: 1,
+    color: TEXT_DARK,
+    fontSize: 14,
+  },
+  historyEmpty: {
+    color: TEXT_MUTED,
+    textAlign: "center",
+    paddingTop: 24,
+    fontSize: 14,
   },
 
   /* Lista */

@@ -18,33 +18,26 @@ function buildSystemPrompt(perfil?: any) {
 - Máquinas disponibles: ${perfil.maquinas?.join(", ") || "no definido"}
 - Restricciones: ${perfil.restricciones?.join(", ") || "ninguna"}` : "no definido";
 
-  // Si viene con respuestas del flujo de conversación
+  // Mantener las selecciones del cuestionario como contexto para consultas posteriores.
   if (perfil?.respuestas) {
     const respuestas = perfil.respuestas;
     const respuestasTexto = Object.entries(respuestas)
       .map(([key, value]) => `- ${key}: ${value}`)
       .join("\n");
 
-    return `Eres Sporti, el asistente de la app SportGym.
-El usuario ha completado un cuestionario para crear su rutina personalizada. Genera un plan de entrenamiento detallado basado en sus respuestas.
+    return `Eres Sporti, el asistente de la app SportGym. El usuario ya tiene una rutina creada dentro de la app. Responde preguntas de seguimiento sobre entrenamiento y explica cómo ajustar esa rutina, sin volver a generar un plan completo a menos que te lo pidan.
 
-Respuestas del usuario:
+Selecciones del usuario:
 ${respuestasTexto}
 
 Perfil adicional:
 ${perfilTexto}
 
 INSTRUCCIONES:
-1. Crea una rutina de entrenamiento semanal estructurada
-2. Incluye ejercicios específicos, series, repeticiones y descanso
-3. Considera las lesiones o condiciones físicas mencionadas
-4. Adapta la rutina al tiempo disponible por sesión
-5. Considera el estilo de vida del usuario
-6. Si el objetivo es ganar masa muscular, enfócate en hipertrofia
-7. Si el objetivo es perder grasa, incluye cardio y alta intensidad
-8. Si el objetivo es mejorar condición, mezcla fuerza y cardio
-9. Responde en español, claro y detallado
-10. NO hables de otros temas fuera del fitness
+1. Personaliza tus respuestas según el objetivo, nivel, tiempo y restricciones indicados.
+2. Considera las lesiones o condiciones físicas mencionadas y recomienda consultar a un profesional cuando corresponda.
+3. Responde en español, claro y breve (máximo 120 palabras).
+4. NO hables de otros temas fuera del fitness.
 
 SOLO puedes hablar de: ejercicio, rutinas, técnica, uso de máquinas, nutrición deportiva básica, suplementos, descanso y recuperación, lesiones comunes del gym (recomendando ver a un médico).
 Si el usuario pregunta CUALQUIER otra cosa, responde exactamente: "${RECHAZO}"
@@ -66,9 +59,6 @@ export async function askSporti(historial: Msg[], perfil?: any): Promise<string>
     return "No está configurada la API key de Gemini en el archivo .env";
   }
   try {
-    // Usar solo la última pregunta del usuario
-    const lastUserMessage = historial[historial.length - 1];
-    
     const res = await fetch(URL, {
       method: "POST",
       headers: {
@@ -77,10 +67,10 @@ export async function askSporti(historial: Msg[], perfil?: any): Promise<string>
       },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: buildSystemPrompt(perfil) }] },
-        contents: [{
-          role: "user",
-          parts: [{ text: String(lastUserMessage.content) }],
-        }],
+        contents: historial.slice(-12).map((message) => ({
+          role: message.role === "assistant" ? "model" : "user",
+          parts: [{ text: message.content }],
+        })),
         generationConfig: { temperature: 0.3, maxOutputTokens: 600 },
       }),
     });

@@ -60,3 +60,11 @@ Join our community of developers creating universal apps.
 Al escanear el QR del gimnasio, la app crea un registro diario en `asistencias/{clientId_YYYY-MM-DD}` con `nombreUsuario`, `usuario`, `hora` (marca de tiempo de Firestore), `fecha`, `cliente` (ID del documento en `clientes`), `nombreCliente` y `estado` (`presente`). En la misma transacción actualiza `clientes/{clientId}`: `asistencias` contiene fechas únicas en formato `YYYY-MM-DD`, junto con `rachaAsistencia`, `mejorRachaAsistencia` y `totalAsistencias`. Un segundo escaneo el mismo día no duplica el registro.
 
 La PWA debe usar estos mismos campos para consultar o mostrar el historial del cliente y el calendario de perfil.: Chat with Expo users and ask questions.
+
+## Chatbot y rutinas personalizadas
+
+Las conversaciones de Sporti se guardan en `conversaciones_chatbot/{conversationId}` y sus mensajes en la subcolección `mensajes`. Cada documento de conversación incluye el ID del cliente, el objetivo, las respuestas del cuestionario y el paso actual para poder reabrir y continuar el chat. El historial se consulta para el cliente que inició sesión.
+
+Al completar el cuestionario, Sporti crea un plan semanal usando ejercicios del catálogo local y guarda cada ejercicio en `rutinas` con el mismo formato que los ejercicios añadidos manualmente (`clienteId`, `ejercicioId`, `ejercicioNombre`, `dia`, `equipo`, `grupoMuscular`, `seriesAsignadas` y `repeticionesAsignadas`). La rutina también queda escrita como respuesta en el historial del chat. Desde Mi rutina se puede abrir el día correspondiente y ajustar series y repeticiones antes de entrenar; los cambios se guardan en Firestore.
+
+Configura las reglas de Firestore para que cada cliente solo pueda acceder a sus documentos de conversación y a sus rutinas. La aplicación filtra las consultas por `clienteId`, pero esa condición de cliente no sustituye las reglas de seguridad del servidor.
