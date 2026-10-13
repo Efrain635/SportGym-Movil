@@ -107,10 +107,14 @@ const currentDay = new Intl.DateTimeFormat("es-MX", { weekday: "long" }).format(
 const currentDayLabel =
   currentDay.charAt(0).toUpperCase() + currentDay.slice(1);
 
-export default function RoutineView() {
+export default function RoutineView({
+  initialScreen = "hub",
+}: {
+  initialScreen?: "hub" | "routine";
+}) {
   const [activeFilter, setActiveFilter] = useState<Filter>("Todos");
   const [screen, setScreen] = useState<"hub" | "routine" | "saved" | "session">(
-    "hub",
+    initialScreen,
   );
   const [selectedRoutineDay, setSelectedRoutineDay] = useState("Lunes");
   const [routines, setRoutines] = useState<Routine[]>([]);

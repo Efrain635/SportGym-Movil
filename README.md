@@ -67,4 +67,6 @@ Las conversaciones de Sporti se guardan en `conversaciones_chatbot/{conversation
 
 Al completar el cuestionario, Sporti crea un plan semanal usando ejercicios del catálogo local y guarda cada ejercicio en `rutinas` con el mismo formato que los ejercicios añadidos manualmente (`clienteId`, `ejercicioId`, `ejercicioNombre`, `dia`, `equipo`, `grupoMuscular`, `seriesAsignadas` y `repeticionesAsignadas`). La rutina también queda escrita como respuesta en el historial del chat. Desde Mi rutina se puede abrir el día correspondiente y ajustar series y repeticiones antes de entrenar; los cambios se guardan en Firestore.
 
-Configura las reglas de Firestore para que cada cliente solo pueda acceder a sus documentos de conversación y a sus rutinas. La aplicación filtra las consultas por `clienteId`, pero esa condición de cliente no sustituye las reglas de seguridad del servidor.
+Según el objetivo del cuestionario, Sporti busca recetas de `recetas` cuyas etiquetas `objetivos` coincidan y las guarda en `favoritos_recetas/{clientId_recetaId}`. La respuesta del chatbot muestra las recetas guardadas y permite abrir directamente Mis favoritos en Nutrición. El acceso directo `/(tabs)/routine?view=routine` abre Mi rutina; `/(tabs)/nutrition?view=favorites` abre los favoritos nutricionales.
+
+Configura las reglas de Firestore para que cada cliente solo pueda acceder a sus documentos de conversación, rutinas y favoritos de recetas. La aplicación filtra las consultas por `clienteId`, pero esa condición de cliente no sustituye las reglas de seguridad del servidor.

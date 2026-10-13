@@ -79,8 +79,13 @@ const recipeMatchesGoal = (recipe: Recipe, goal: string) =>
     normalizeText(objective).includes(normalizeText(goal)),
   );
 
-export default function NutritionView() {
-  const [screen, setScreen] = useState<NutritionScreen>("catalog");
+export default function NutritionView({
+  initialScreen = "catalog",
+}: {
+  initialScreen?: NutritionScreen;
+}) {
+  const { user } = useAuth();
+  const [screen, setScreen] = useState<NutritionScreen>(initialScreen);
   const [returnScreen, setReturnScreen] = useState<NutritionScreen>("catalog");
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [favoriteRecipes, setFavoriteRecipes] = useState<Recipe[]>([]);
@@ -91,11 +96,11 @@ export default function NutritionView() {
   const [search, setSearch] = useState("");
   const [showAllRecipes, setShowAllRecipes] = useState(false);
   const [isLoadingRecipes, setIsLoadingRecipes] = useState(true);
-  const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
+  const [isLoadingFavorites, setIsLoadingFavorites] = useState(
+    initialScreen === "favorites" && Boolean(user?.clientId),
+  );
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const [recipesLoadError, setRecipesLoadError] = useState(false);
-  const { user } = useAuth();
-
   useEffect(() => {
     let isCurrent = true;
     getRecipes()
@@ -134,6 +139,9 @@ export default function NutritionView() {
             "Revisa tu conexión e inténtalo de nuevo.",
           );
         }
+      })
+      .finally(() => {
+        if (isCurrent) setIsLoadingFavorites(false);
       });
     return () => {
       isCurrent = false;
@@ -187,6 +195,7 @@ export default function NutritionView() {
       return;
     }
     setScreen("catalog");
+    router.setParams({ view: "catalog" });
   };
 
   const isRecipeFavorite = (recipe: Recipe) =>

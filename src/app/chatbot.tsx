@@ -34,6 +34,10 @@ import {
   getCardioRecommendation,
 } from "../lib/chatbot-routines";
 import { type ClientProfile } from "../lib/fitness-ai";
+import {
+  getRecipesForNutritionFocus,
+  saveFavoriteRecipes,
+} from "../lib/recipes";
 import { askSporti } from "../lib/sporti-groq";
 
 const GREEN = "#4C9A3A";
@@ -749,6 +753,7 @@ export default function ChatbotScreen() {
           const restSeconds =
             userGoal === "Ganar masa muscular" ? 90 : 60;
           let routineSaved = false;
+          let nutritionMessage = "";
           if (user?.clientId && routine.length > 0) {
             try {
               await saveGeneratedRoutine(
@@ -772,6 +777,36 @@ export default function ChatbotScreen() {
             );
           }
 
+          if (user?.clientId && userGoal) {
+            try {
+              const recommendedRecipes =
+                await getRecipesForNutritionFocus(userGoal);
+              if (recommendedRecipes.length > 0) {
+                await saveFavoriteRecipes(user.clientId, recommendedRecipes);
+                nutritionMessage =
+                  `\n\nTambién guardé ${recommendedRecipes.length} receta(s) en tus favoritos de Nutrición para tu enfoque de ${userGoal.toLowerCase()}:\n` +
+                  recommendedRecipes.map((recipe) => `• ${recipe.name}`).join("\n");
+              } else {
+                nutritionMessage =
+                  `\n\nNo encontré recetas en el catálogo etiquetadas para ${userGoal.toLowerCase()}. No guardé recetas que no correspondan a tu enfoque.`;
+              }
+            } catch (error) {
+              console.error(
+                "No se pudieron guardar las recetas recomendadas:",
+                error,
+              );
+              nutritionMessage =
+                "\n\nNo pude guardar las recetas recomendadas en tus favoritos. Revisa tu conexión e inténtalo de nuevo.";
+              Alert.alert(
+                "No se guardaron las recetas",
+                "La rutina está lista, pero no se pudieron actualizar tus favoritos de Nutrición.",
+              );
+            }
+          } else {
+            nutritionMessage =
+              "\n\nInicia sesión como cliente para guardar recetas en tus favoritos de Nutrición.";
+          }
+
           const routineText = formatChatbotRoutine(
             routine,
             restSeconds,
@@ -788,7 +823,7 @@ export default function ChatbotScreen() {
           const botMessage = {
             id: `b-${Date.now()}`,
             from: "bot" as const,
-            text: routineText,
+            text: `${routineText}${nutritionMessage}`,
           };
           setMessages((prev) => [...prev, botMessage]);
           await persistMessage(activeConversationId, botMessage);
@@ -901,7 +936,7 @@ export default function ChatbotScreen() {
           <Pressable
             style={styles.summaryCard}
             onPress={() => {
-              router.navigate("/(tabs)/routine");
+              router.navigate("/(tabs)/routine?view=routine" as never);
             }}
           >
             <View style={styles.summaryCardHeader}>
@@ -912,7 +947,28 @@ export default function ChatbotScreen() {
               </View>
             </View>
             <View style={styles.summaryCardFooter}>
-              <Text style={styles.summaryCardButtonText}>Editar en Mi rutina</Text>
+              <Text style={styles.summaryCardButtonText}>Ver mi rutina</Text>
+              <Ionicons name="arrow-forward" size={20} color={GREEN} />
+            </View>
+          </Pressable>
+
+          <Pressable
+            style={styles.summaryCard}
+            onPress={() => {
+              router.navigate("/(tabs)/nutrition?view=favorites" as never);
+            }}
+          >
+            <View style={styles.summaryCardHeader}>
+              <Ionicons name="restaurant" size={32} color={GREEN} />
+              <View style={styles.summaryCardHeaderText}>
+                <Text style={styles.summaryCardTitle}>Recetas para tu enfoque</Text>
+                <Text style={styles.summaryCardSubtitle}>
+                  Guardadas en tus favoritos de Nutrición
+                </Text>
+              </View>
+            </View>
+            <View style={styles.summaryCardFooter}>
+              <Text style={styles.summaryCardButtonText}>Ver recetas favoritas</Text>
               <Ionicons name="arrow-forward" size={20} color={GREEN} />
             </View>
           </Pressable>

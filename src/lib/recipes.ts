@@ -5,8 +5,8 @@ import {
   getDocs,
   query,
   serverTimestamp,
-  setDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 
 import { db } from "../../assets/database/firebase";
@@ -231,6 +231,65 @@ export async function getRecipes(): Promise<Recipe[]> {
     .sort((first, second) => Number(second.isFeatured) - Number(first.isFeatured));
 }
 
+const normalizeGoal = (value: string) =>
+  value
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const nutritionGoalKeywords: Record<string, string[]> = {
+  "Ganar masa muscular": [
+    "ganancia muscular",
+    "masa muscular",
+    "aumento muscular",
+    "hipertrofia",
+    "muscle gain",
+  ],
+  "Perder grasa": [
+    "perdida de peso",
+    "perder grasa",
+    "definicion",
+    "weight loss",
+    "fat loss",
+  ],
+  "Mejorar condición física": [
+    "rendimiento",
+    "energia",
+    "recuperacion",
+    "condicion fisica",
+    "performance",
+  ],
+  "Mantenerme en forma": [
+    "mantenimiento",
+    "salud general",
+    "equilibrado",
+    "bienestar",
+    "maintenance",
+  ],
+};
+
+export async function getRecipesForNutritionFocus(
+  focus: string,
+  maxResults = 5,
+): Promise<Recipe[]> {
+  const keywords = nutritionGoalKeywords[focus] ?? [focus];
+  const normalizedKeywords = keywords.map(normalizeGoal);
+  const recipes = await getRecipes();
+
+  return recipes
+    .filter((recipe) =>
+      recipe.objectives.some((objective) => {
+        const normalizedObjective = normalizeGoal(objective);
+        return normalizedKeywords.some(
+          (keyword) =>
+            normalizedObjective.includes(keyword) ||
+            keyword.includes(normalizedObjective),
+        );
+      }),
+    )
+    .slice(0, maxResults);
+}
+
 export async function getClientFavoriteRecipes(
   clientId: string,
 ): Promise<Recipe[]> {
@@ -250,25 +309,38 @@ export async function getClientFavoriteRecipes(
 }
 
 export async function saveFavoriteRecipe(clientId: string, recipe: Recipe) {
-  await setDoc(doc(db, "favoritos_recetas", `${clientId}_${recipe.id}`), {
-    clienteId: clientId,
-    recetaId: recipe.id,
-    nombre: recipe.name,
-    descripcion: recipe.description,
-    categoria: recipe.category,
-    tipoComida: recipe.meal,
-    imagen: recipe.imageUrl,
-    tiempoPreparacion: recipe.preparationMinutes,
-    calorias: recipe.calories,
-    proteina: recipe.protein,
-    carbohidratos: recipe.carbohydrates,
-    grasas: recipe.fats,
-    ingredientes: recipe.ingredients,
-    pasos: recipe.steps,
-    objetivos: recipe.objectives,
-    destacada: recipe.isFeatured,
-    fechaCreacion: serverTimestamp(),
-  });
+  await saveFavoriteRecipes(clientId, [recipe]);
+}
+
+export async function saveFavoriteRecipes(
+  clientId: string,
+  recipes: Recipe[],
+) {
+  if (recipes.length === 0) return;
+
+  const batch = writeBatch(db);
+  for (const recipe of recipes) {
+    batch.set(doc(db, "favoritos_recetas", `${clientId}_${recipe.id}`), {
+      clienteId: clientId,
+      recetaId: recipe.id,
+      nombre: recipe.name,
+      descripcion: recipe.description,
+      categoria: recipe.category,
+      tipoComida: recipe.meal,
+      imagen: recipe.imageUrl,
+      tiempoPreparacion: recipe.preparationMinutes,
+      calorias: recipe.calories,
+      proteina: recipe.protein,
+      carbohidratos: recipe.carbohydrates,
+      grasas: recipe.fats,
+      ingredientes: recipe.ingredients,
+      pasos: recipe.steps,
+      objetivos: recipe.objectives,
+      destacada: recipe.isFeatured,
+      fechaCreacion: serverTimestamp(),
+    });
+  }
+  await batch.commit();
 }
 
 export async function removeFavoriteRecipe(
