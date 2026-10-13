@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { router, usePathname } from "expo-router";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -79,13 +79,6 @@ function getExerciseById(id: string): Exercise | undefined {
 type Filter = "Todos" | "Hoy" | "Semana";
 type MuscleFilter = "Todos" | "Pecho" | "Espalda" | "Hombros" | "Brazos" | "Abdomen" | "Piernas";
 
-const tabKeyToIndex: Record<string, number> = {
-  inicio: 0,
-  rutina: 1,
-  tienda: 2,
-  nutricion: 3,
-};
-
 type TabName = "Inicio" | "Rutina" | "Tienda" | "Nutrición";
 
 type Routine = Pick<
@@ -116,7 +109,6 @@ const currentDayLabel =
 
 export default function RoutineView() {
   const [activeFilter, setActiveFilter] = useState<Filter>("Todos");
-  const [activeTab, setActiveTab] = useState<TabName>("Rutina");
   const [screen, setScreen] = useState<"hub" | "routine" | "saved" | "session">(
     "hub",
   );
@@ -126,7 +118,6 @@ export default function RoutineView() {
   const [isLoadingRoutine, setIsLoadingRoutine] = useState(false);
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
   const [bottomNavIndex, setBottomNavIndex] = useState(0); // Start at Inicio (hub)
-  const pathname = usePathname();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -203,8 +194,6 @@ export default function RoutineView() {
   }, [screen, user?.clientId]);
 
   const handleTabPress = (tab: TabName) => {
-    setActiveTab(tab);
-
     const indexMap: Record<TabName, number> = {
       Inicio: 0,
       Rutina: 1,
@@ -215,16 +204,16 @@ export default function RoutineView() {
 
     switch (tab) {
       case "Inicio":
-        router.push("/(tabs)");
+        router.navigate("/(tabs)");
         break;
       case "Rutina":
-        router.push("/(tabs)/routine");
+        router.navigate("/(tabs)/routine");
         break;
       case "Tienda":
-        router.push("/(tabs)/store");
+        router.navigate("/(tabs)/store");
         break;
       case "Nutrición":
-        router.push("/(tabs)/nutrition");
+        router.navigate("/(tabs)/nutrition");
         break;
     }
   };
@@ -404,7 +393,7 @@ export default function RoutineView() {
 
           <AnimatedBottomNav
             initialIndex={bottomNavIndex}
-            onChange={onBottomNavChange}
+            onChange={handleBottomNavChange}
           />
         </View>
       </SafeAreaView>

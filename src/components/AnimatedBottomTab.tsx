@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { usePathname } from "expo-router";
 import {
     Pressable,
     StyleSheet,
@@ -11,6 +11,12 @@ import { SportGymColors } from "../constants/theme";
 const GREEN = SportGymColors.primary;
 const GREEN_SOFT = "#E8F3E5";
 const MUTED = "#7A7A7A";
+const ROUTE_BY_TAB_KEY: Record<string, string> = {
+  inicio: "/",
+  rutina: "/routine",
+  tienda: "/store",
+  nutricion: "/nutrition",
+};
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -54,10 +60,13 @@ export function AnimatedBottomNav({
   initialIndex = 0,
   onChange,
 }: AnimatedBottomNavProps) {
-  const [index, setIndex] = useState(initialIndex);
+  const pathname = usePathname();
+  const routeIndex = tabs.findIndex(
+    (tab) => ROUTE_BY_TAB_KEY[tab.key] === pathname,
+  );
+  const activeIndex = routeIndex === -1 ? initialIndex : routeIndex;
 
   const select = (i: number) => {
-    setIndex(i);
     onChange?.(i, tabs[i].key);
   };
 
@@ -65,7 +74,7 @@ export function AnimatedBottomNav({
     <View style={styles.bottomNav}>
       <View style={styles.row}>
         {tabs.map((tab, i) => {
-          const isActive = i === index;
+          const isActive = i === activeIndex;
 
           return (
             <Pressable

@@ -171,7 +171,7 @@ export default function NutritionView() {
       nutricion: "/(tabs)/nutrition",
     };
     const route = tabMap[key];
-    if (route) router.push(route as never);
+    if (route) router.navigate(route as never);
   };
 
   const openRecipe = (recipe: Recipe) => {

@@ -379,7 +379,7 @@ export default function ExploreExercisesScreen() {
       Nutrición: "/(tabs)/nutrition",
     };
 
-    router.push(routes[tab] as never);
+    router.navigate(routes[tab] as never);
   };
 
   const handleBottomNavChange = (index: number, key: string) => {

@@ -138,7 +138,7 @@ export default function StoreView() {
       tienda: "/(tabs)/store",
       nutricion: "/(tabs)/nutrition",
     };
-    router.push(tabMap[key] as never);
+    router.navigate(tabMap[key] as never);
   };
 
   const title =

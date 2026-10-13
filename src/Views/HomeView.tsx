@@ -1,6 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { router, usePathname } from 'expo-router';
+import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
     Alert,
@@ -18,8 +18,6 @@ import { ThemedText } from '../components/themed-text';
 import { SportGymColors } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { registerAttendance, useAttendance } from '../lib/attendance';
-
-type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';
 
 const parseMembershipDate = (value: string | null) => {
   if (!value) {
@@ -73,8 +71,6 @@ const getCurrentWeekDates = () => {
 };
 
 export default function HomeView() {
-  const [bottomNavIndex, setBottomNavIndex] = useState(0);
-  const pathname = usePathname();
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [isSavingAttendance, setIsSavingAttendance] = useState(false);
   const scanInProgress = useRef(false);
@@ -124,7 +120,7 @@ export default function HomeView() {
       tienda: '/(tabs)/store',
       nutricion: '/(tabs)/nutrition',
     };
-    router.push(tabMap[key] as never);
+    router.navigate(tabMap[key] as never);
   };
 
   const handleScan = async ({ data }: { data: string }) => {
@@ -437,7 +433,6 @@ export default function HomeView() {
           {/* ================================================= */}
 
           <AnimatedBottomNav
-            initialIndex={bottomNavIndex}
             onChange={handleBottomNavChange}
           />
 

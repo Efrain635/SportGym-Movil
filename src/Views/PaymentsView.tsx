@@ -59,16 +59,16 @@ export default function PaymentsView() {
 
     switch (tab) {
       case "Inicio":
-        router.push("/(tabs)");
+        router.navigate("/(tabs)");
         break;
       case "Rutina":
-        router.push("/(tabs)/routine");
+        router.navigate("/(tabs)/routine");
         break;
       case "Tienda":
-        router.push("/(tabs)/store");
+        router.navigate("/(tabs)/store");
         break;
       case "Nutrición":
-        router.push("/(tabs)/nutrition");
+        router.navigate("/(tabs)/nutrition");
         break;
     }
   };
