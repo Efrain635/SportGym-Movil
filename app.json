@@ -8,7 +8,12 @@
     "scheme": "sportgym",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Permite que SportGym use el reconocimiento de voz",
+        "NSMicrophoneUsageDescription": "Permite que SportGym use tu micrófono para reconocimiento de voz"
+      },
+      "bitcode": false
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
@@ -18,7 +23,18 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.INTERNET",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK",
+        "android.permission.BLUETOOTH"
+      ],
+      "package": "com.byron635.SportGym"
     },
     "web": {
       "output": "static",
@@ -44,13 +60,28 @@
           "barcodeScannerEnabled": true
         }
       ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Permite que SportGym use tu micrófono para reconocimiento de voz",
+          "speechRecognitionPermission": "Permite que SportGym use el reconocimiento de voz"
+        }
+      ],
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "edde8d52-d881-4934-b30a-d7239ec7d14b"
+      }
     }
   }
 }

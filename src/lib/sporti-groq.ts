@@ -1,5 +1,7 @@
+
 const MODEL = "gemini-3.5-flash-lite";
 const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
 const RECHAZO =
   "Solo puedo ayudarte con temas de gimnasio y fitness 💪. ¿Quieres que te arme una rutina?";
@@ -54,11 +56,15 @@ Perfil del usuario:${perfilTexto}`;
 }
 
 export async function askSporti(historial: Msg[], perfil?: any): Promise<string> {
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  console.log('[VOZ] askSporti: Iniciando petición a Gemini');
+  const apiKey = GEMINI_API_KEY;
   if (!apiKey) {
-    return "No está configurada la API key de Gemini en el archivo .env";
+    console.error('[VOZ] askSporti: No hay API key configurada');
+    return "No está configurada la API key de Gemini";
   }
+
   try {
+    console.log('[VOZ] askSporti: Enviando petición a', URL);
     const res = await fetch(URL, {
       method: "POST",
       headers: {
@@ -75,18 +81,35 @@ export async function askSporti(historial: Msg[], perfil?: any): Promise<string>
       }),
     });
 
+    console.log('[VOZ] askSporti: Estado HTTP:', res.status);
+
     if (!res.ok) {
       const detalle = await res.text();
-      console.log("Error Gemini:", res.status, detalle);
-      return "Tuve un problema para conectarme. Intenta de nuevo.";
+      console.error('[VOZ] askSporti: Error Gemini:', res.status, detalle);
+
+      if (res.status === 401) {
+        return "🔐 Hmm, hay un problema con mi configuración. Intenta de nuevo en un momento.";
+      }
+      if (res.status === 404) {
+        return "🤖 Mi cerebro no está disponible ahora. ¡Vuelve pronto!";
+      }
+      if (res.status === 429) {
+        return "⏳ Wow, me estás haciendo trabajar mucho. ¡Descansa un poco y vuelve!";
+      }
+      if (res.status === 400) {
+        return "❓ No entendí bien tu pregunta. ¿Podrías reformularla?";
+      }
+      return "🌐 Tengo problemas de conexión. ¡Intenta de nuevo!";
     }
 
+    console.log('[VOZ] askSporti: Petición exitosa, procesando respuesta');
     const data = await res.json();
     const partes = data?.candidates?.[0]?.content?.parts ?? [];
     const texto = partes.map((p: any) => p.text ?? "").join("").trim();
+    console.log('[VOZ] askSporti: Respuesta recibida, longitud:', texto.length);
     return texto || RECHAZO;
   } catch (e) {
-    console.log("Error de red:", e);
-    return "Tuve un problema para conectarme. Intenta de nuevo.";
+    console.error('[VOZ] askSporti: Error de red:', e);
+    return "📶 No tengo conexión a internet ahora. ¡Revisa tu WiFi y vuelve!";
   }
 }
