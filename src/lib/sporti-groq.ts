@@ -2,11 +2,17 @@
 const MODEL = "gemini-3.5-flash-lite";
 const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
 
 const RECHAZO =
   "Solo puedo ayudarte con temas de gimnasio y fitness 💪. ¿Quieres que te arme una rutina?";
 
 type Msg = { role: "user" | "assistant"; content: string };
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function buildSystemPrompt(perfil?: any) {
   const perfilTexto = perfil ? `
@@ -55,61 +61,77 @@ Usa los datos del perfil para dar recomendaciones personalizadas: calcula ejerci
 Perfil del usuario:${perfilTexto}`;
 }
 
-export async function askSporti(historial: Msg[], perfil?: any): Promise<string> {
-  console.log('[VOZ] askSporti: Iniciando petición a Gemini');
+async function fetchGemini(historial: Msg[], perfil?: any, retryCount = 0): Promise<Response> {
+  console.log('[GEMINI] Enviando petición a', URL);
   const apiKey = GEMINI_API_KEY;
   if (!apiKey) {
-    console.error('[VOZ] askSporti: No hay API key configurada');
-    return "No está configurada la API key de Gemini";
+    throw new Error("No hay API key configurada");
   }
 
-  try {
-    console.log('[VOZ] askSporti: Enviando petición a', URL);
-    const res = await fetch(URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: buildSystemPrompt(perfil) }] },
-        contents: historial.slice(-12).map((message) => ({
-          role: message.role === "assistant" ? "model" : "user",
-          parts: [{ text: message.content }],
-        })),
-        generationConfig: { temperature: 0.3, maxOutputTokens: 600 },
-      }),
-    });
+  const res = await fetch(URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: buildSystemPrompt(perfil) }] },
+      contents: historial.slice(-12).map((message) => ({
+        role: message.role === "assistant" ? "model" : "user",
+        parts: [{ text: message.content }],
+      })),
+      generationConfig: { temperature: 0.3, maxOutputTokens: 600 },
+    }),
+  });
 
-    console.log('[VOZ] askSporti: Estado HTTP:', res.status);
+  console.log('[GEMINI] Estado HTTP:', res.status);
 
-    if (!res.ok) {
-      const detalle = await res.text();
-      console.error('[VOZ] askSporti: Error Gemini:', res.status, detalle);
+  if (!res.ok) {
+    const detalle = await res.text();
+    console.error('[GEMINI] Error:', res.status, detalle);
 
-      if (res.status === 401) {
-        return "🔐 Hmm, hay un problema con mi configuración. Intenta de nuevo en un momento.";
-      }
-      if (res.status === 404) {
-        return "🤖 Mi cerebro no está disponible ahora. ¡Vuelve pronto!";
-      }
-      if (res.status === 429) {
-        return "⏳ Wow, me estás haciendo trabajar mucho. ¡Descansa un poco y vuelve!";
-      }
-      if (res.status === 400) {
-        return "❓ No entendí bien tu pregunta. ¿Podrías reformularla?";
-      }
-      return "🌐 Tengo problemas de conexión. ¡Intenta de nuevo!";
+    const isRetryable = res.status === 503 || res.status === 429 || res.status === 500;
+    if (isRetryable && retryCount < MAX_RETRIES) {
+      console.log(`[GEMINI] Reintentando (${retryCount + 1}/${MAX_RETRIES}) después de ${RETRY_DELAY}ms...`);
+      await delay(RETRY_DELAY * (retryCount + 1));
+      return fetchGemini(historial, perfil, retryCount + 1);
     }
 
-    console.log('[VOZ] askSporti: Petición exitosa, procesando respuesta');
+    throw { status: res.status, detalle };
+  }
+
+  return res;
+}
+
+export async function askSporti(historial: Msg[], perfil?: any): Promise<string> {
+  console.log('[GEMINI] Iniciando petición');
+
+  try {
+    const res = await fetchGemini(historial, perfil);
+
+    console.log('[GEMINI] Petición exitosa, procesando respuesta');
     const data = await res.json();
     const partes = data?.candidates?.[0]?.content?.parts ?? [];
     const texto = partes.map((p: any) => p.text ?? "").join("").trim();
-    console.log('[VOZ] askSporti: Respuesta recibida, longitud:', texto.length);
+    console.log('[GEMINI] Respuesta recibida, longitud:', texto.length);
     return texto || RECHAZO;
-  } catch (e) {
-    console.error('[VOZ] askSporti: Error de red:', e);
+  } catch (e: any) {
+    if (e.status === 401) {
+      return "🔐 Hmm, hay un problema con mi configuración. Intenta de nuevo en un momento.";
+    }
+    if (e.status === 404) {
+      return "🤖 Mi cerebro no está disponible ahora. ¡Vuelve pronto!";
+    }
+    if (e.status === 429) {
+      return "⏳ Wow, me estás haciendo trabajar mucho. ¡Descansa un poco y vuelve!";
+    }
+    if (e.status === 400) {
+      return "❓ No entendí bien tu pregunta. ¿Podrías reformularla?";
+    }
+    if (e.status === 503) {
+      return "🔥 El servicio está muy ocupado ahora. ¡Intenta de nuevo en unos segundos!";
+    }
+    console.error('[GEMINI] Error de red:', e);
     return "📶 No tengo conexión a internet ahora. ¡Revisa tu WiFi y vuelve!";
   }
 }

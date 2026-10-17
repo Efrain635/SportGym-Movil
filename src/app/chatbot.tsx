@@ -3,55 +3,43 @@ import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
-  Animated,
-  FlatList,
-  Image,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    Alert,
+    Animated,
+    FlatList,
+    Image,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 
 import {
-  createClientChatConversation,
-  getChatConversationMessages,
-  getClientChatConversations,
-  saveChatConversationMessage,
-  saveGeneratedRoutine,
-  updateChatConversation,
-  type ChatConversation,
+    createClientChatConversation,
+    getChatConversationMessages,
+    getClientChatConversations,
+    saveChatConversationMessage,
+    saveGeneratedRoutine,
+    updateChatConversation,
+    type ChatConversation,
 } from "../../assets/database/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import {
-  findSpanishVoice,
-  isVoiceRecognitionAvailable,
-  setupVoiceRecognition,
-  speakText,
-  startVoiceRecognition,
-  stopVoiceRecognition,
-  type VoiceCallbacks,
-  type VoiceState
-} from "../lib/audio-service";
-import {
-  createChatbotRoutine,
-  formatChatbotRoutine,
-  getCardioRecommendation,
+    createChatbotRoutine,
+    formatChatbotRoutine,
+    getCardioRecommendation,
 } from "../lib/chatbot-routines";
 import { type ClientProfile } from "../lib/fitness-ai";
 import {
-  getRecipesForNutritionFocus,
-  saveFavoriteRecipes,
+    getRecipesForNutritionFocus,
+    saveFavoriteRecipes,
 } from "../lib/recipes";
 import { askSporti } from "../lib/sporti-groq";
-
-import VozSporti from "../components/VozSporti";
 
 const GREEN = "#4C9A3A";
 const GREEN_DARK = "#3F8A2F";
@@ -148,22 +136,6 @@ export default function ChatbotScreen() {
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [showOptionsDelayed, setShowOptionsDelayed] = useState(false);
 
-  // Estados de voz
-  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
-  const [voiceTranscript, setVoiceTranscript] = useState("");
-  const [voiceLanguage, setVoiceLanguage] = useState("es-MX");
-  const [isContinuousMode, setIsContinuousMode] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const voiceTranscriptRef = useRef("");
-  const voiceAbortRef = useRef<AbortController | null>(null);
-  const waveAnim1 = useRef(new Animated.Value(0)).current;
-  const waveAnim2 = useRef(new Animated.Value(0)).current;
-  const waveAnim3 = useRef(new Animated.Value(0)).current;
-  const micPulseAnim = useRef(new Animated.Value(1)).current;
-
-  // ElevenLabs Voice
-  const [showVozSporti, setShowVozSporti] = useState(false);
-
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
@@ -188,193 +160,6 @@ export default function ChatbotScreen() {
       setShowOptionsDelayed(false);
     }
   }, [showOptions, currentQuestion]);
-
-  // Configurar voz al montar
-  useEffect(() => {
-    const initVoice = async () => {
-      if (!isVoiceRecognitionAvailable()) {
-        console.warn('[VOZ] Reconocimiento de voz no disponible (necesita regenerar build con npx expo run:android)');
-        return;
-      }
-
-      const hasPermission = await setupVoiceRecognition();
-      if (!hasPermission) {
-        console.log('[VOZ] No se otorgaron permisos de reconocimiento de voz');
-      }
-      const spanishVoice = await findSpanishVoice();
-      setVoiceLanguage(spanishVoice);
-      console.log('[VOZ] Voz en español configurada:', spanishVoice);
-    };
-    initVoice();
-
-    // Limpiar reconocimiento de voz al desmontar
-    return () => {
-      console.log('[VOZ] Desmontando componente, deteniendo reconocimiento');
-      stopVoiceRecognition();
-    };
-  }, []);
-
-  // Animación de ondas de voz
-  useEffect(() => {
-    if (voiceState === "listening") {
-      const animateWaves = () => {
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(waveAnim1, { toValue: 1, duration: 400, useNativeDriver: true }),
-            Animated.timing(waveAnim1, { toValue: 0, duration: 400, useNativeDriver: true }),
-          ])
-        ).start();
-
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(waveAnim2, { toValue: 1, duration: 400, delay: 100, useNativeDriver: true }),
-            Animated.timing(waveAnim2, { toValue: 0, duration: 400, useNativeDriver: true }),
-          ])
-        ).start();
-
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(waveAnim3, { toValue: 1, duration: 400, delay: 200, useNativeDriver: true }),
-            Animated.timing(waveAnim3, { toValue: 0, duration: 400, useNativeDriver: true }),
-          ])
-        ).start();
-
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(micPulseAnim, { toValue: 1.3, duration: 600, useNativeDriver: true }),
-            Animated.timing(micPulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-          ])
-        ).start();
-      };
-      animateWaves();
-    } else {
-      waveAnim1.setValue(0);
-      waveAnim2.setValue(0);
-      waveAnim3.setValue(0);
-      micPulseAnim.setValue(1);
-    }
-  }, [voiceState]);
-
-  // Manejar transcripción de voz
-  const handleVoiceTranscript = useCallback((text: string, isFinal: boolean) => {
-    console.log('[VOZ] handleVoiceTranscript:', text, 'isFinal:', isFinal);
-    voiceTranscriptRef.current = text;
-    setVoiceTranscript(text);
-
-    if (isFinal) {
-      console.log('[VOZ] Transcripción final, enviando mensaje:', text);
-      stopVoiceRecognition();
-      setVoiceState("processing");
-      void sendMessage(text);
-    }
-  }, []);
-
-  // Manejar error de voz
-  const handleVoiceError = useCallback((error: string) => {
-    console.error('[VOZ] handleVoiceError:', error);
-    setVoiceState("idle");
-    setVoiceTranscript("");
-    Alert.alert("Error de voz", error);
-  }, []);
-
-  // Manejar inicio de reconocimiento
-  const handleVoiceStart = useCallback(() => {
-    console.log('[VOZ] handleVoiceStart');
-    setVoiceState("listening");
-    setVoiceTranscript("");
-  }, []);
-
-  // Manejar fin de reconocimiento
-  const handleVoiceEnd = useCallback(() => {
-    console.log('[VOZ] handleVoiceEnd');
-    setVoiceState("idle");
-    setVoiceTranscript("");
-  }, []);
-
-  // Iniciar reconocimiento de voz
-  const startListening = useCallback(async () => {
-    console.log('[VOZ] startListening llamado');
-    if (voiceState === "listening") {
-      console.log('[VOZ] Ya está escuchando, deteniendo...');
-      stopVoiceRecognition();
-      setVoiceState("idle");
-      return;
-    }
-
-    const hasPermission = await setupVoiceRecognition();
-    if (!hasPermission) {
-      Alert.alert(
-        "🎤 Permiso de micrófono",
-        "Sporti necesita acceso a tu micrófono para escucharte. Ve a configuración de la app y habilita el permiso.",
-        [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Abrir configuración",
-            onPress: () => {
-              // Intentar abrir configuración de la app
-              if (Platform.OS === 'android') {
-                Alert.alert(
-                  "Android",
-                  "Ve a Configuración > Aplicaciones > SportGym > Permisos > Micrófono y permite el acceso"
-                );
-              } else {
-                Alert.alert(
-                  "iOS",
-                  "Ve a Configuración > SportGym > Micrófono y permite el acceso"
-                );
-              }
-            }
-          }
-        ]
-      );
-      return;
-    }
-
-    const callbacks: VoiceCallbacks = {
-      onTranscript: handleVoiceTranscript,
-      onError: handleVoiceError,
-      onStart: handleVoiceStart,
-      onEnd: handleVoiceEnd,
-    };
-
-    await startVoiceRecognition(callbacks, voiceLanguage);
-  }, [voiceState, voiceLanguage, handleVoiceTranscript, handleVoiceError, handleVoiceStart, handleVoiceEnd]);
-
-  // Hablar respuesta de Sporti
-  const speakResponse = useCallback(async (text: string) => {
-    if (!voiceEnabled) {
-      console.log('[VOZ] Voz desactivada, no hablando');
-      setVoiceState("idle");
-      if (isContinuousMode) {
-        console.log('[VOZ] Modo continuo activo, iniciando escucha aunque la voz esté desactivada');
-        setTimeout(() => startListening(), 500);
-      }
-      return;
-    }
-
-    console.log('[VOZ] speakResponse:', text);
-    setVoiceState("speaking");
-    await speakText(
-      text,
-      voiceLanguage,
-      () => {
-        console.log('[VOZ] speakResponse: onDone');
-        setVoiceState("idle");
-        if (isContinuousMode) {
-          console.log('[VOZ] Reanudando escucha en modo continuo');
-          setTimeout(() => startListening(), 500);
-        }
-      },
-      (error) => {
-        console.error('[VOZ] speakResponse: onError', error);
-        setVoiceState("idle");
-        if (isContinuousMode) {
-          console.log('[VOZ] Error en voz, reanudando escucha en modo continuo');
-          setTimeout(() => startListening(), 500);
-        }
-      }
-    );
-  }, [voiceLanguage, isContinuousMode, startListening, voiceEnabled]);
 
   const dynamicOptions = useMemo(() => {
     return OPTIONS;
@@ -445,9 +230,6 @@ export default function ChatbotScreen() {
   };
 
   const resetConversationState = () => {
-    stopVoiceRecognition();
-    setVoiceState("idle");
-    setVoiceTranscript("");
     setMessages([initialMessage]);
     setShowOptions(true);
     setUserGoal(null);
@@ -883,12 +665,6 @@ export default function ChatbotScreen() {
       return;
     }
 
-    // Detener reconocimiento de voz si está activo
-    if (voiceState === "listening") {
-      console.log('[VOZ] Deteniendo reconocimiento antes de enviar');
-      stopVoiceRecognition();
-      setVoiceState("processing");
-    }
 
     let activeConversationId = conversationId;
     if (!activeConversationId && user?.clientId) {
@@ -1151,11 +927,7 @@ export default function ChatbotScreen() {
     setIsLoading(false);
     scrollToEnd();
 
-    // Si el mensaje vino de voz, hablar la respuesta
-    if (text && voiceState === "processing") {
-      console.log('[VOZ] Respuesta recibida, hablando:', response);
-      await speakResponse(response);
-    }
+
   };
 
   const renderMessage = useCallback(({ item }: { item: Message }) => {
@@ -1367,33 +1139,7 @@ export default function ChatbotScreen() {
             <Ionicons name="add-circle-outline" size={25} color={TEXT_MUTED} />
           </Pressable>
 
-          <Pressable
-            onPress={() => setVoiceEnabled(!voiceEnabled)}
-            hitSlop={12}
-            style={styles.voiceToggleBtn}
-            accessibilityLabel={voiceEnabled ? "Desactivar voz" : "Activar voz"}
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name={voiceEnabled ? "volume-high" : "volume-mute"}
-              size={22}
-              color={voiceEnabled ? GREEN : TEXT_MUTED}
-            />
-          </Pressable>
 
-          <Pressable
-            onPress={() => setIsContinuousMode(!isContinuousMode)}
-            hitSlop={12}
-            style={styles.voiceToggleBtn}
-            accessibilityLabel={isContinuousMode ? "Desactivar modo continuo" : "Activar modo continuo"}
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name={isContinuousMode ? "repeat" : "repeat-outline"}
-              size={22}
-              color={isContinuousMode ? GREEN : TEXT_MUTED}
-            />
-          </Pressable>
         </View>
 
         {/* Mensajes + opciones */}
@@ -1426,48 +1172,12 @@ export default function ChatbotScreen() {
             style={styles.input}
             returnKeyType="send"
             onSubmitEditing={() => sendMessage(input)}
-            editable={!isLoading && voiceState !== "listening"}
+            editable={!isLoading}
             accessibilityLabel="Campo de texto para escribir tu pregunta"
             accessibilityHint="Escribe tu pregunta y presiona enviar"
           />
 
-          {/* Botón de micrófono - solo si está disponible */}
-          {isVoiceRecognitionAvailable() && (
-            voiceState === "listening" ? (
-              <Pressable
-                onPress={startListening}
-                style={styles.voiceBtnActive}
-                accessibilityLabel="Detener grabación"
-                accessibilityRole="button"
-                accessibilityHint="Detén la grabación de voz"
-              >
-                <Ionicons name="mic" size={18} color="#FFFFFF" />
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={startListening}
-                style={styles.voiceBtn}
-                accessibilityLabel="Usar voz"
-                accessibilityRole="button"
-                accessibilityHint="Graba tu pregunta con voz"
-              >
-                <Ionicons name="mic-outline" size={18} color={GREEN} />
-              </Pressable>
-            )
-          )}
-
-          {/* Botón de voz IA con ElevenLabs */}
-          <Pressable
-            onPress={() => setShowVozSporti(true)}
-            style={styles.aiVoiceBtn}
-            accessibilityLabel="Hablar con Sporti AI"
-            accessibilityRole="button"
-            accessibilityHint="Abre el chat de voz con Sporti IA"
-          >
-            <Ionicons name="headset" size={18} color={GREEN} />
-          </Pressable>
-
-          {isLoading || voiceState === "processing" ? (
+          {isLoading ? (
             <Animated.View
               style={styles.loadingBtn}
               accessibilityLabel="Sporti está escribiendo"
@@ -1499,35 +1209,6 @@ export default function ChatbotScreen() {
             </Pressable>
           )}
         </Animated.View>
-
-        {/* Estado de voz */}
-        {voiceState === "listening" && (
-          <Pressable
-            onPress={() => {
-              console.log('[VOZ] Cancelando voz con tap');
-              stopVoiceRecognition();
-              setVoiceState("idle");
-              setVoiceTranscript("");
-            }}
-            style={styles.voiceStatusContainer}
-          >
-            <Animated.View style={[styles.voiceMicCircle, { transform: [{ scale: micPulseAnim }] }]}>
-              <Ionicons name="mic" size={24} color="#FFFFFF" />
-            </Animated.View>
-            <View style={styles.voiceWaves}>
-              <Animated.View style={[styles.voiceWave, { height: Animated.multiply(waveAnim1, 20) }]} />
-              <Animated.View style={[styles.voiceWave, { height: Animated.multiply(waveAnim2, 30) }]} />
-              <Animated.View style={[styles.voiceWave, { height: Animated.multiply(waveAnim3, 20) }]} />
-            </View>
-            <Text style={styles.voiceStatusText}>
-              {voiceTranscript || "Escuchando..."}
-            </Text>
-            {isContinuousMode && (
-              <Text style={styles.voiceModeText}>Modo continuo activo</Text>
-            )}
-            <Text style={styles.voiceCancelText}>Toca para cancelar</Text>
-          </Pressable>
-        )}
 
         {showHistory ? (
           <View style={styles.historyOverlay}>
@@ -1587,23 +1268,6 @@ export default function ChatbotScreen() {
             />
           </View>
         ) : null}
-
-        {/* ElevenLabs Voice Modal */}
-        {showVozSporti && (
-          <View style={styles.elevenLabsOverlay}>
-            <View style={styles.elevenLabsContainer}>
-              <Pressable
-                onPress={() => setShowVozSporti(false)}
-                style={styles.elevenLabsCloseBtn}
-                hitSlop={12}
-              >
-                <Ionicons name="close" size={28} color="#FFFFFF" />
-              </Pressable>
-              <Text style={styles.elevenLabsTitle}>Sporti AI con voz real</Text>
-              <VozSporti onClose={() => setShowVozSporti(false)} />
-            </View>
-          </View>
-        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -2030,17 +1694,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 8,
   },
-  aiVoiceBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#E6F4FE",
-    borderWidth: 1.5,
-    borderColor: GREEN,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-  },
   voiceStatusContainer: {
     marginHorizontal: 16,
     marginBottom: 16,
@@ -2093,40 +1746,5 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
     fontWeight: "400",
-  },
-
-  /* ElevenLabs Overlay */
-  elevenLabsOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
-    zIndex: 100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  elevenLabsContainer: {
-    backgroundColor: "#E6F4FE",
-    borderRadius: 20,
-    padding: 24,
-    width: "90%",
-    maxWidth: 400,
-    alignItems: "center",
-  },
-  elevenLabsCloseBtn: {
-    alignSelf: "flex-end",
-    backgroundColor: GREEN,
-    borderRadius: 20,
-    padding: 8,
-    marginBottom: 16,
-  },
-  elevenLabsTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: GREEN,
-    marginBottom: 20,
-    textAlign: "center",
   },
 });
