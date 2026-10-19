@@ -98,6 +98,139 @@ const OPTIONS: Option[] = [
   },
 ];
 
+// Fuera del componente (nivel de módulo)
+const animatedOptionIds = new Set<string>();
+const animatedQuestionOptionIds = new Set<string>();
+
+// Componentes fuera del componente principal para evitar re-renders
+const MessageBubble = memo(({ item, onCopy, isCopied }: { item: Message; onCopy: (text: string, id: string) => void; isCopied: boolean }) => {
+  const isBot = item.from === "bot";
+
+  return (
+    <View
+      style={[
+        styles.bubble,
+        isBot ? styles.botBubble : styles.userBubble,
+      ]}
+    >
+      <Text style={[styles.bubbleText, !isBot && styles.userBubbleText]}>
+        {item.text}
+      </Text>
+      {isBot && (
+        <Pressable
+          onPress={() => onCopy(item.text, item.id)}
+          style={styles.copyBtn}
+          hitSlop={8}
+        >
+          <Ionicons
+            name={isCopied ? "checkmark" : "copy-outline"}
+            size={16}
+            color={TEXT_MUTED}
+          />
+        </Pressable>
+      )}
+    </View>
+  );
+});
+
+const OptionCard = memo(
+  ({ opt, index, onSelect }: { opt: Option; index: number; onSelect: (title: string) => void }) => {
+    const alreadyAnimated = animatedOptionIds.has(opt.id);
+    const fadeAnim = useRef(new Animated.Value(alreadyAnimated ? 1 : 0)).current;
+    const slideAnim = useRef(new Animated.Value(alreadyAnimated ? 0 : 30)).current;
+
+    React.useEffect(() => {
+      if (animatedOptionIds.has(opt.id)) return; // ya se animó, no repetir
+      animatedOptionIds.add(opt.id);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 400,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    return (
+      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Pressable
+          onPress={() => onSelect(opt.title)}
+          style={({ pressed }) => [styles.optionCard, pressed && styles.optionPressed]}
+          accessibilityLabel={opt.title}
+          accessibilityHint={opt.subtitle}
+          accessibilityRole="button"
+        >
+          <View style={styles.optionIconBox}>
+            <MaterialCommunityIcons name={opt.icon} size={30} color={TEXT_DARK} />
+          </View>
+          <View style={styles.optionTextBox}>
+            <Text style={styles.optionTitle}>{opt.title}</Text>
+            <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
+          </View>
+        </Pressable>
+      </Animated.View>
+    );
+  },
+  (prev, next) =>
+    prev.opt.id === next.opt.id &&
+    prev.index === next.index &&
+    prev.onSelect === next.onSelect
+);
+
+const QuestionOptionButton = memo(
+  ({ option, index, onSelect }: { option: QuestionOption; index: number; onSelect: (value: string) => void }) => {
+    const alreadyAnimated = animatedQuestionOptionIds.has(option.value);
+    const fadeAnim = useRef(new Animated.Value(alreadyAnimated ? 1 : 0)).current;
+    const slideAnim = useRef(new Animated.Value(alreadyAnimated ? 0 : 20)).current;
+
+    React.useEffect(() => {
+      if (animatedQuestionOptionIds.has(option.value)) return; // ya se animó, no repetir
+      animatedQuestionOptionIds.add(option.value);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          delay: index * 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          delay: index * 50,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    return (
+      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Pressable
+          onPress={() => onSelect(option.value)}
+          style={({ pressed }) => [
+            styles.questionOptionBtn,
+            pressed && styles.questionOptionPressed,
+          ]}
+        >
+          <Text style={styles.questionOptionText}>{option.label}</Text>
+        </Pressable>
+      </Animated.View>
+    );
+  },
+  (prev, next) =>
+    prev.option.value === next.option.value &&
+    prev.index === next.index &&
+    prev.onSelect === next.onSelect
+);
+
 export default function ChatbotScreen() {
   const { user } = useAuth();
   const listRef = useRef<FlatList<Message>>(null);
@@ -134,7 +267,6 @@ export default function ChatbotScreen() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const [showOptionsDelayed, setShowOptionsDelayed] = useState(false);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -152,18 +284,7 @@ export default function ChatbotScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (showOptions || currentQuestion) {
-      setShowOptionsDelayed(false);
-      setTimeout(() => setShowOptionsDelayed(true), 300);
-    } else {
-      setShowOptionsDelayed(false);
-    }
-  }, [showOptions, currentQuestion]);
 
-  const dynamicOptions = useMemo(() => {
-    return OPTIONS;
-  }, []);
 
   React.useEffect(() => {
     if (isLoading) {
@@ -220,6 +341,8 @@ export default function ChatbotScreen() {
       }
     : null;
 
+  const dynamicOptions = useMemo(() => OPTIONS, []);
+
   const scrollToEnd = () =>
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
 
@@ -227,6 +350,37 @@ export default function ChatbotScreen() {
     await Clipboard.setStringAsync(text);
     setCopiedMessageId(id);
     setTimeout(() => setCopiedMessageId(null), 2000);
+  };
+
+  // Guardar referencias a estado para que sendMessage sea estable
+  const stateRef = useRef({
+    input,
+    conversationId,
+    user,
+    userGoal,
+    userResponses,
+    conversationStep,
+    currentQuestion,
+    messages,
+    profile,
+    showOptions,
+    initialMessage,
+    conversations,
+  });
+
+  stateRef.current = {
+    input,
+    conversationId,
+    user,
+    userGoal,
+    userResponses,
+    conversationStep,
+    currentQuestion,
+    messages,
+    profile,
+    showOptions,
+    initialMessage,
+    conversations,
   };
 
   const resetConversationState = () => {
@@ -238,6 +392,8 @@ export default function ChatbotScreen() {
     setCurrentQuestionIndex(0);
     setConversationStep("initial");
     setShowSummary(false);
+    animatedOptionIds.clear();
+    animatedQuestionOptionIds.clear();
   };
 
   const shakeInput = () => {
@@ -248,111 +404,6 @@ export default function ChatbotScreen() {
       Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
     ]).start();
   };
-
-  const MessageBubble = memo(({ item, onCopy, isCopied }: { item: Message; onCopy: (text: string, id: string) => void; isCopied: boolean }) => {
-    const isBot = item.from === "bot";
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(20)).current;
-
-    React.useEffect(() => {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, [item.id]);
-
-    return (
-      <Animated.View
-        style={[
-          styles.bubble,
-          isBot ? styles.botBubble : styles.userBubble,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          },
-        ]}
-      >
-        <Text style={[styles.bubbleText, !isBot && styles.userBubbleText]}>
-          {item.text}
-        </Text>
-        {isBot && (
-          <Pressable
-            onPress={() => onCopy(item.text, item.id)}
-            style={styles.copyBtn}
-            hitSlop={8}
-          >
-            <Ionicons
-              name={isCopied ? "checkmark" : "copy-outline"}
-              size={16}
-              color={TEXT_MUTED}
-            />
-          </Pressable>
-        )}
-      </Animated.View>
-    );
-  });
-
-  const OptionCard = memo(({ opt, index, onSelect }: { opt: Option; index: number; onSelect: (title: string) => void }) => {
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(30)).current;
-
-    React.useEffect(() => {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          delay: index * 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 400,
-          delay: index * 100,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, [opt.id, index]);
-
-    return (
-      <Animated.View
-        style={{
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        }}
-      >
-        <Pressable
-          onPress={() => onSelect(opt.title)}
-          style={({ pressed }) => [
-            styles.optionCard,
-            pressed && styles.optionPressed,
-          ]}
-          accessibilityLabel={opt.title}
-          accessibilityHint={opt.subtitle}
-          accessibilityRole="button"
-        >
-          <View style={styles.optionIconBox}>
-            <MaterialCommunityIcons
-              name={opt.icon}
-              size={30}
-              color={TEXT_DARK}
-            />
-          </View>
-          <View style={styles.optionTextBox}>
-            <Text style={styles.optionTitle}>{opt.title}</Text>
-            <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
-          </View>
-        </Pressable>
-      </Animated.View>
-    );
-  });
 
   const getQuestionsForGoal = (goal: string): Question[] => {
     const baseQuestions: Question[] = [
@@ -532,6 +583,7 @@ export default function ChatbotScreen() {
     resetConversationState();
     setShowHistory(false);
     setConversationId(null);
+    animatedOptionIds.clear(); // Limpiar registro de animaciones para volver a animar
     if (!user?.clientId) return;
 
     try {
@@ -653,8 +705,9 @@ export default function ChatbotScreen() {
     };
   }, [user?.clientId]);
 
-  const sendMessage = async (text?: string) => {
-    const textToSend = text || input.trim();
+  const sendMessage = useCallback(async (text?: string) => {
+    const s = stateRef.current;
+    const textToSend = text || s.input.trim();
     if (!textToSend || textToSend.length < 1) {
       shakeInput();
       Alert.alert("Mensaje vacío", "Por favor escribe algo antes de enviar");
@@ -666,11 +719,11 @@ export default function ChatbotScreen() {
     }
 
 
-    let activeConversationId = conversationId;
-    if (!activeConversationId && user?.clientId) {
+    let activeConversationId = s.conversationId;
+    if (!activeConversationId && s.user?.clientId) {
       try {
         activeConversationId = await createClientChatConversation(
-          user.clientId,
+          s.user.clientId,
           textToSend.slice(0, 60),
         );
         setConversationId(activeConversationId);
@@ -719,7 +772,7 @@ export default function ChatbotScreen() {
     scrollToEnd();
 
     // Manejo del flujo de conversación
-    if (conversationStep === "initial") {
+    if (s.conversationStep === "initial") {
       // Verificar si el usuario seleccionó una de las opciones principales
       const selectedOption = OPTIONS.find(opt => opt.title === textToSend);
       if (selectedOption) {
@@ -754,14 +807,14 @@ export default function ChatbotScreen() {
       }
     }
 
-    if (conversationStep === "goal" || conversationStep === "details") {
-      const questions = getQuestionsForGoal(userGoal || "");
-      const answeredCount = Object.keys(userResponses).length - 1; // -1 porque goal ya está incluido
+    if (s.conversationStep === "goal" || s.conversationStep === "details") {
+      const questions = getQuestionsForGoal(s.userGoal || "");
+      const answeredCount = Object.keys(s.userResponses).length - 1; // -1 porque goal ya está incluido
 
       if (answeredCount < questions.length) {
         // Guardar la respuesta
         const currentQ = questions[answeredCount];
-        const updatedResponses = { ...userResponses, [currentQ.key]: textToSend };
+        const updatedResponses = { ...s.userResponses, [currentQ.key]: textToSend };
         setUserResponses(updatedResponses);
 
         // Si hay más preguntas, hacer la siguiente
@@ -781,7 +834,7 @@ export default function ChatbotScreen() {
             await persistConversationState(
               activeConversationId ?? "",
               "goal",
-              userGoal,
+              s.userGoal,
               updatedResponses,
               false,
             );
@@ -791,27 +844,27 @@ export default function ChatbotScreen() {
           return;
         } else {
           const routine = createChatbotRoutine({
-            goal: userGoal ?? "Mantenerme en forma",
+            goal: s.userGoal ?? "Mantenerme en forma",
             daysAnswer: updatedResponses.days ?? "4 días",
             durationAnswer: updatedResponses.duration ?? "60 minutos",
             focus: updatedResponses.focus,
             restriction: updatedResponses.injuries,
             level:
-              profile?.level ??
+              s.profile?.level ??
               (updatedResponses.current_activity === "Ninguna"
                 ? "principiante"
                 : undefined),
           });
           const restSeconds =
-            userGoal === "Ganar masa muscular" ? 90 : 60;
+            s.userGoal === "Ganar masa muscular" ? 90 : 60;
           let routineSaved = false;
           let nutritionMessage = "";
-          if (user?.clientId && routine.length > 0) {
+          if (s.user?.clientId && routine.length > 0) {
             try {
               await saveGeneratedRoutine(
-                user.clientId,
-                user.username,
-                `${user.firstName} ${user.lastName}`.trim(),
+                s.user.clientId,
+                s.user.username,
+                `${s.user.firstName} ${s.user.lastName}`.trim(),
                 routine,
               );
               routineSaved = true;
@@ -822,25 +875,25 @@ export default function ChatbotScreen() {
                 "Sporti generó el plan, pero no se guardó en Mi rutina. Revisa tu conexión e inténtalo de nuevo.",
               );
             }
-          } else if (!user?.clientId) {
+          } else if (!s.user?.clientId) {
             Alert.alert(
               "Rutina no guardada",
               "Inicia sesión como cliente para guardar la rutina y editarla en Mi rutina.",
             );
           }
 
-          if (user?.clientId && userGoal) {
+          if (s.user?.clientId && s.userGoal) {
             try {
               const recommendedRecipes =
-                await getRecipesForNutritionFocus(userGoal);
+                await getRecipesForNutritionFocus(s.userGoal);
               if (recommendedRecipes.length > 0) {
-                await saveFavoriteRecipes(user.clientId, recommendedRecipes);
+                await saveFavoriteRecipes(s.user.clientId, recommendedRecipes);
                 nutritionMessage =
-                  `\n\nTambién guardé ${recommendedRecipes.length} receta(s) en tus favoritos de Nutrición para tu enfoque de ${userGoal.toLowerCase()}:\n` +
+                  `\n\nTambién guardé ${recommendedRecipes.length} receta(s) en tus favoritos de Nutrición para tu enfoque de ${s.userGoal.toLowerCase()}:\n` +
                   recommendedRecipes.map((recipe) => `• ${recipe.name}`).join("\n");
               } else {
                 nutritionMessage =
-                  `\n\nNo encontré recetas en el catálogo etiquetadas para ${userGoal.toLowerCase()}. No guardé recetas que no correspondan a tu enfoque.`;
+                  `\n\nNo encontré recetas en el catálogo etiquetadas para ${s.userGoal.toLowerCase()}. No guardé recetas que no correspondan a tu enfoque.`;
               }
             } catch (error) {
               console.error(
@@ -863,9 +916,9 @@ export default function ChatbotScreen() {
             routine,
             restSeconds,
             getCardioRecommendation(
-              userGoal ?? "",
+              s.userGoal ?? "",
               updatedResponses,
-              profile?.level,
+              s.profile?.level,
             ),
             routineSaved,
           );
@@ -882,7 +935,7 @@ export default function ChatbotScreen() {
           await persistConversationState(
             activeConversationId ?? "",
             "summary",
-            userGoal,
+            s.userGoal,
             updatedResponses,
             true,
           );
@@ -894,7 +947,7 @@ export default function ChatbotScreen() {
     }
 
     // Si estamos en modo completo o el usuario envió un mensaje normal, usar la API
-    const historial = messages.map((m) => ({
+    const historial = s.messages.map((m) => ({
       role: (m.from === "user" ? "user" : "assistant") as "user" | "assistant",
       content: m.text,
     }));
@@ -905,21 +958,21 @@ export default function ChatbotScreen() {
     });
 
     const perfil = {
-      objetivo: profile?.goal,
-      nivel: profile?.level,
-      dias: profile?.daysPerWeek,
-      maquinas: profile?.gymMachines,
-      peso: profile?.weight,
-      altura: profile?.height,
-      edad: profile?.age,
-      genero: profile?.gender,
-      restricciones: profile?.restrictions,
+      objetivo: s.profile?.goal,
+      nivel: s.profile?.level,
+      dias: s.profile?.daysPerWeek,
+      maquinas: s.profile?.gymMachines,
+      peso: s.profile?.weight,
+      altura: s.profile?.height,
+      edad: s.profile?.age,
+      genero: s.profile?.gender,
+      restricciones: s.profile?.restrictions,
     };
 
     const response = await askSporti(historial, {
       ...perfil,
-      objetivo: userGoal ?? perfil.objetivo,
-      respuestas: userResponses,
+      objetivo: s.userGoal ?? perfil.objetivo,
+      respuestas: s.userResponses,
     });
     const botMessage = { id: `b-${Date.now()}`, from: "bot" as const, text: response };
     setMessages((prev) => [...prev, botMessage]);
@@ -928,7 +981,7 @@ export default function ChatbotScreen() {
     scrollToEnd();
 
 
-  };
+  }, []); // Dependencias vacías porque usa stateRef
 
   const renderMessage = useCallback(({ item }: { item: Message }) => {
     return (
@@ -938,48 +991,11 @@ export default function ChatbotScreen() {
         isCopied={copiedMessageId === item.id}
       />
     );
-  }, [copiedMessageId]);
+  }, [copiedMessageId, copyMessage]);
 
-  const QuestionOptionButton = memo(({ option, index, onSelect }: { option: QuestionOption; index: number; onSelect: (value: string) => void }) => {
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(20)).current;
-
-    React.useEffect(() => {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          delay: index * 50,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          delay: index * 50,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, [option.value, index]);
-
-    return (
-      <Animated.View
-        style={{
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        }}
-      >
-        <Pressable
-          onPress={() => onSelect(option.value)}
-          style={({ pressed }) => [
-            styles.questionOptionBtn,
-            pressed && styles.questionOptionPressed,
-          ]}
-        >
-          <Text style={styles.questionOptionText}>{option.label}</Text>
-        </Pressable>
-      </Animated.View>
-    );
-  });
+  const handleSelect = useCallback((title: string) => {
+    sendMessage(title);
+  }, [sendMessage]);
 
   const renderFooter = () => {
     if (isLoading) {
@@ -1064,21 +1080,21 @@ export default function ChatbotScreen() {
       );
     }
 
-    if (showOptionsDelayed && showOptions) {
+    if (showOptions) {
       return (
         <View style={styles.optionsWrapper}>
           {dynamicOptions.map((opt, index) => (
-            <OptionCard key={opt.id} opt={opt} index={index} onSelect={sendMessage} />
+            <OptionCard key={opt.id} opt={opt} index={index} onSelect={handleSelect} />
           ))}
         </View>
       );
     }
 
-    if (showOptionsDelayed && currentQuestion && (conversationStep === "goal" || conversationStep === "details")) {
+    if (currentQuestion && (conversationStep === "goal" || conversationStep === "details")) {
       return (
         <View style={styles.questionOptionsWrapper}>
           {currentQuestion.options.map((opt, index) => (
-            <QuestionOptionButton key={opt.value} option={opt} index={index} onSelect={sendMessage} />
+            <QuestionOptionButton key={opt.value} option={opt} index={index} onSelect={handleSelect} />
           ))}
         </View>
       );
@@ -1327,10 +1343,6 @@ const styles = StyleSheet.create({
   },
   newChatBtn: {
     marginLeft: 2,
-    padding: 8,
-  },
-  voiceToggleBtn: {
-    marginLeft: 8,
     padding: 8,
   },
   historyOverlay: {
@@ -1673,78 +1685,5 @@ const styles = StyleSheet.create({
     color: GREEN,
     fontSize: 16,
     fontWeight: "600",
-  },
-
-  /* Voz */
-  voiceBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#F3F3F3",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-  },
-  voiceBtnActive: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: GREEN,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-  },
-  voiceStatusContainer: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: "#E6F4FE",
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: GREEN,
-    alignItems: "center",
-  },
-  voiceMicCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: GREEN,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  voiceWaves: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    marginBottom: 8,
-  },
-  voiceWave: {
-    width: 5,
-    backgroundColor: GREEN,
-    borderRadius: 2.5,
-  },
-  voiceStatusText: {
-    fontSize: 15,
-    color: TEXT_DARK,
-    fontStyle: "italic",
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  voiceModeText: {
-    fontSize: 12,
-    color: GREEN,
-    textAlign: "center",
-    marginTop: 4,
-    fontWeight: "600",
-  },
-  voiceCancelText: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    textAlign: "center",
-    marginTop: 8,
-    fontWeight: "400",
   },
 });
