@@ -135,7 +135,7 @@ export default function NutritionView({
       .catch(() => {
         if (isCurrent) {
           Alert.alert(
-            "No se pudieron cargar tus favoritos",
+            "No se pudo cargar Mis recetas",
             "Revisa tu conexión e inténtalo de nuevo.",
           );
         }
@@ -205,7 +205,7 @@ export default function NutritionView({
     if (!user?.clientId) {
       Alert.alert(
         "Inicia sesión para guardar",
-        "Necesitas una cuenta de cliente para guardar recetas en tus favoritos.",
+        "Necesitas una cuenta de cliente para guardar recetas en Mis recetas.",
       );
       return;
     }
@@ -223,7 +223,7 @@ export default function NutritionView({
       }
     } catch {
       Alert.alert(
-        "No se pudo actualizar el favorito",
+        "No se pudo actualizar Mis recetas",
         "Revisa tu conexión e inténtalo de nuevo.",
       );
     } finally {
@@ -259,7 +259,7 @@ export default function NutritionView({
 
   const headerTitle =
     screen === "favorites"
-      ? "Mis favoritos"
+      ? "Mis recetas"
       : screen === "detail"
         ? "Detalle de receta"
         : "Nutrición";
@@ -290,9 +290,9 @@ export default function NutritionView({
               <Pressable
                 style={styles.headerButton}
                 onPress={openFavorites}
-                accessibilityLabel="Abrir mis favoritos"
+                accessibilityLabel="Abrir Mis recetas"
               >
-                <Ionicons name="heart-outline" size={23} color="#F2F2F2" />
+                <Ionicons name="book-outline" size={23} color="#F2F2F2" />
               </Pressable>
             ) : (
               <View style={styles.headerButton} />
@@ -462,6 +462,8 @@ export default function NutritionView({
                             key={recipe.id}
                             recipe={recipe}
                             onPress={() => openRecipe(recipe)}
+                            onFavoritePress={() => toggleFavorite(recipe)}
+                            isFavorite={isRecipeFavorite(recipe)}
                           />
                         ))}
                     </View>
@@ -484,31 +486,49 @@ export default function NutritionView({
               showsVerticalScrollIndicator={false}
             >
               {isLoadingFavorites ? (
-                <LoadingState label="Cargando tus favoritos..." />
+                <LoadingState label="Cargando Mis recetas..." />
               ) : favoriteRecipes.length > 0 ? (
-                <View style={styles.recipeList}>
-                  {favoriteRecipes.map((recipe) => (
-                    <RecipeRow
-                      key={recipe.id}
-                      recipe={recipe}
-                      onPress={() => openRecipe(recipe)}
-                      onFavoritePress={() => toggleFavorite(recipe)}
-                      isFavorite
-                    />
-                  ))}
-                </View>
+                <>
+                  <View style={styles.savedRecipesHeading}>
+                    <ThemedText style={styles.savedRecipesDescription}>
+                      Tus recetas recomendadas y las que guardaste.
+                    </ThemedText>
+                    <Pressable
+                      style={styles.addRecipesButton}
+                      onPress={() => setScreen("catalog")}
+                      accessibilityRole="button"
+                      accessibilityLabel="Agregar más recetas"
+                    >
+                      <Ionicons name="add" size={19} color="#FFFFFF" />
+                      <ThemedText style={styles.addRecipesButtonText}>
+                        Agregar más
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                  <View style={styles.recipeList}>
+                    {favoriteRecipes.map((recipe) => (
+                      <RecipeRow
+                        key={recipe.id}
+                        recipe={recipe}
+                        onPress={() => openRecipe(recipe)}
+                        onFavoritePress={() => toggleFavorite(recipe)}
+                        isFavorite
+                      />
+                    ))}
+                  </View>
+                </>
               ) : (
                 <EmptyState
-                  icon="heart-outline"
+                  icon="book-outline"
                   title={
                     user?.clientId
-                      ? "Aún no guardas recetas"
+                      ? "Tu lista está vacía"
                       : "Inicia sesión como cliente"
                   }
                   description={
                     user?.clientId
-                      ? "Explora las recetas y guarda aquí tus favoritas."
-                      : "Inicia sesión para guardar recetas en tu lista de favoritos."
+                      ? "Explora el catálogo y guarda aquí las recetas que quieras."
+                      : "Inicia sesión para guardar recetas en Mis recetas."
                   }
                   actionLabel="Explorar recetas"
                   onAction={() => setScreen("catalog")}
@@ -732,7 +752,11 @@ function RecipeRow({
             onFavoritePress();
           }}
           accessibilityRole="button"
-          accessibilityLabel={`Quitar ${recipe.name} de favoritos`}
+          accessibilityLabel={
+            isFavorite
+              ? `Quitar ${recipe.name} de Mis recetas`
+              : `Agregar ${recipe.name} a Mis recetas`
+          }
         >
           <Ionicons
             name={isFavorite ? "heart" : "heart-outline"}
@@ -832,7 +856,7 @@ function RecipeDetails({
           onPress={onToggleFavorite}
           disabled={isSaving}
           accessibilityLabel={
-            isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"
+            isFavorite ? "Quitar de Mis recetas" : "Guardar en Mis recetas"
           }
         >
           {isSaving ? (
@@ -953,7 +977,7 @@ function RecipeDetails({
               color="#FFFFFF"
             />
             <ThemedText style={styles.favoriteButtonText}>
-              {isFavorite ? "Guardada en mis favoritos" : "Guardar en favoritos"}
+              {isFavorite ? "Guardada en Mis recetas" : "Guardar en Mis recetas"}
             </ThemedText>
           </>
         )}
@@ -1090,6 +1114,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 5,
+  },
+  savedRecipesHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 12,
+  },
+  savedRecipesDescription: {
+    flex: 1,
+    color: "#AAB0AA",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  addRecipesButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: SportGymColors.primary,
+  },
+  addRecipesButtonText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
   },
   sectionTitle: { color: "#F1F2F1", fontSize: 15, fontWeight: "800" },
   sectionAction: {

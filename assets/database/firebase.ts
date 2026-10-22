@@ -20,6 +20,7 @@ import {
     getDocs,
     initializeFirestore,
     limit,
+    onSnapshot,
     orderBy,
     query,
     runTransaction,
@@ -344,6 +345,36 @@ export async function getChatConversationMessages(conversationId: string) {
   })) as ChatConversationMessage[];
 }
 
+export async function deleteClientChatConversation(
+  clientId: string,
+  conversationId: string,
+) {
+  const conversationReference = doc(
+    db,
+    "conversaciones_chatbot",
+    conversationId,
+  );
+  const conversationSnapshot = await getDoc(conversationReference);
+
+  if (
+    !conversationSnapshot.exists() ||
+    conversationSnapshot.data().clienteId !== clientId
+  ) {
+    throw new Error("La conversación no existe o no pertenece a este usuario.");
+  }
+
+  const messagesSnapshot = await getDocs(chatMessagesCollection(conversationId));
+  for (let start = 0; start < messagesSnapshot.docs.length; start += 500) {
+    const batch = writeBatch(db);
+    messagesSnapshot.docs
+      .slice(start, start + 500)
+      .forEach((message) => batch.delete(message.ref));
+    await batch.commit();
+  }
+
+  await deleteDoc(conversationReference);
+}
+
 export async function saveChatConversationMessage(
   conversationId: string,
   message: Omit<ChatConversationMessage, "id">,
@@ -600,6 +631,46 @@ export async function getClientWorkoutProgress(clientId: string) {
   const completedWorkouts = snapshot.docs.filter(
     (workout) => workout.data().estado === "completado",
   );
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  const weeklyWorkouts = Array.from({ length: 7 }, () => 0);
+  const recentWorkouts = completedWorkouts
+    .map((workout) => {
+      const data = workout.data();
+      const rawDate = data.fechaInicio ?? data.fechaFinalizacion;
+      const date =
+        rawDate &&
+        typeof rawDate === "object" &&
+        "toDate" in rawDate &&
+        typeof rawDate.toDate === "function"
+          ? rawDate.toDate()
+          : typeof rawDate === "string"
+            ? new Date(rawDate)
+            : null;
+      const validDate = date && !Number.isNaN(date.getTime()) ? date : null;
+      if (validDate && validDate >= weekStart && validDate < weekEnd) {
+        weeklyWorkouts[(validDate.getDay() + 6) % 7] += 1;
+      }
+
+      return {
+        id: workout.id,
+        date: validDate?.toISOString() ?? null,
+        exercises: Array.isArray(data.ejercicios)
+          ? data.ejercicios.length
+          : typeof data.totalEjercicios === "number"
+            ? data.totalEjercicios
+            : 0,
+        durationMinutes:
+          typeof data.duracionMinutos === "number" ? data.duracionMinutos : null,
+        sortDate: validDate?.getTime() ?? 0,
+      };
+    })
+    .sort((first, second) => second.sortDate - first.sortDate)
+    .slice(0, 15)
+    .map(({ sortDate: _sortDate, ...workout }) => workout);
 
   const totalExercises = completedWorkouts.reduce((total, workout) => {
     const data = workout.data();
@@ -612,7 +683,286 @@ export async function getClientWorkoutProgress(clientId: string) {
   return {
     totalExercises,
     totalWorkouts: completedWorkouts.length,
+    weeklyWorkouts,
+    recentWorkouts,
   };
+}
+
+export type ClientWeightEntry = {
+  weight: number;
+  date: string;
+};
+
+export type ClientMeasurementEntry = {
+  date: string;
+  waist?: number;
+  hip?: number;
+  arms?: number;
+  thighs?: number;
+};
+
+export type ClientProgressHistory = {
+  goal: string | null;
+  targetWeight: number | null;
+  weights: ClientWeightEntry[];
+  measurements: ClientMeasurementEntry[];
+  nextWeightUpdate: string | null;
+  nextMeasurementsUpdate: string | null;
+};
+
+const localProgressDate = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+const getNextProgressDate = (lastDate: string | null, intervalDays: number) => {
+  if (!lastDate) return null;
+  const parts = lastDate.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!parts) return null;
+  const nextDate = new Date(
+    Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]) + intervalDays),
+  )
+    .toISOString()
+    .slice(0, 10);
+  return localProgressDate() >= nextDate ? null : nextDate;
+};
+
+const progressRecord = (value: unknown): ClientRecord =>
+  isRecord(value) ? value : {};
+
+const progressNumber = (record: ClientRecord, ...keys: string[]) => {
+  for (const key of keys) {
+    if (typeof record[key] === "number") return record[key] as number;
+  }
+  return null;
+};
+
+const progressString = (record: ClientRecord, ...keys: string[]) => {
+  for (const key of keys) {
+    if (typeof record[key] === "string") return record[key] as string;
+  }
+  return null;
+};
+
+const getProgressArrays = (data: ClientRecord) => {
+  const progress = progressRecord(data.progreso);
+  const uniqueBy = (entries: unknown[], keyFor: (entry: unknown) => string) =>
+    [...new Map(entries.map((entry) => [keyFor(entry), entry])).values()];
+  const weights = uniqueBy([
+    ...(Array.isArray(data.historialPeso) ? data.historialPeso : []),
+    ...(Array.isArray(progress.pesos) ? progress.pesos : []),
+  ], (value) => {
+    const entry = progressRecord(value);
+    const weight = progressNumber(entry, "peso", "weight");
+    const date = progressString(entry, "fecha", "date");
+    return weight !== null && date ? `${date}:${weight}` : JSON.stringify(value);
+  });
+  const measurements = uniqueBy([
+    ...(Array.isArray(data.historialMedidas) ? data.historialMedidas : []),
+    ...(Array.isArray(progress.medidas) ? progress.medidas : []),
+  ], (value) => {
+    const entry = progressRecord(value);
+    const date = progressString(entry, "fecha", "date");
+    if (!date) return JSON.stringify(value);
+    const waist = progressNumber(entry, "cintura", "waist");
+    const hip = progressNumber(entry, "cadera", "hip");
+    const arms = progressNumber(entry, "brazos", "arms");
+    const thighs = progressNumber(entry, "muslos", "thighs");
+    return `${date}:${waist ?? ""}:${hip ?? ""}:${arms ?? ""}:${thighs ?? ""}`;
+  });
+  return { progress, weights, measurements };
+};
+
+const parseClientProgressHistory = (data: ClientRecord): ClientProgressHistory => {
+  const { progress, weights: storedWeights, measurements: storedMeasurements } =
+    getProgressArrays(data);
+  const weights = storedWeights.flatMap((value) => {
+    const entry = progressRecord(value);
+    const weight = progressNumber(entry, "peso", "weight");
+    const date = progressString(entry, "fecha", "date");
+    return weight !== null && date ? [{ weight, date }] : [];
+  }).sort((first, second) => first.date.localeCompare(second.date));
+  const measurements = storedMeasurements.flatMap((value) => {
+    const entry = progressRecord(value);
+    const date = progressString(entry, "fecha", "date");
+    if (!date) return [];
+    const waist = progressNumber(entry, "cintura", "waist");
+    const hip = progressNumber(entry, "cadera", "hip");
+    const arms = progressNumber(entry, "brazos", "arms");
+    const thighs = progressNumber(entry, "muslos", "thighs");
+    return [{
+      date,
+      ...(waist !== null ? { waist } : {}),
+      ...(hip !== null ? { hip } : {}),
+      ...(arms !== null ? { arms } : {}),
+      ...(thighs !== null ? { thighs } : {}),
+    }];
+  }).sort((first, second) => first.date.localeCompare(second.date));
+
+  return {
+    goal:
+      progressString(progress, "objetivo") ??
+      progressString(data, "objetivo", "goal"),
+    targetWeight:
+      progressNumber(progress, "pesoObjetivo") ??
+      progressNumber(data, "pesoObjetivo"),
+    weights,
+    measurements,
+    nextWeightUpdate: getNextProgressDate(weights.at(-1)?.date ?? null, 1),
+    nextMeasurementsUpdate: getNextProgressDate(measurements.at(-1)?.date ?? null, 7),
+  };
+};
+
+export async function getClientProgressHistory(
+  clientId: string,
+): Promise<ClientProgressHistory> {
+  if (!clientId.trim()) throw new Error("missing-client-id");
+  const snapshot = await getDoc(doc(db, "clientes", clientId));
+  if (!snapshot.exists()) throw new Error("client-not-found");
+  return parseClientProgressHistory(snapshot.data());
+}
+
+export function subscribeClientProgressHistory(
+  clientId: string,
+  onUpdate: (history: ClientProgressHistory) => void,
+  onError: (error: Error) => void,
+) {
+  if (!clientId.trim()) throw new Error("missing-client-id");
+  return onSnapshot(
+    doc(db, "clientes", clientId),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onError(new Error("client-not-found"));
+        return;
+      }
+      onUpdate(parseClientProgressHistory(snapshot.data()));
+    },
+    onError,
+  );
+}
+
+export async function updateClientProgressGoal(
+  clientId: string,
+  goal: string,
+  targetWeight: number | null,
+) {
+  if (!clientId.trim()) throw new Error("missing-client-id");
+  if (!goal.trim()) throw new Error("missing-progress-goal");
+  if (
+    targetWeight !== null &&
+    (!Number.isFinite(targetWeight) || targetWeight < 20 || targetWeight > 400)
+  ) {
+    throw new Error("invalid-progress-target");
+  }
+
+  const clientRef = doc(db, "clientes", clientId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(clientRef);
+    if (!snapshot.exists()) throw new Error("client-not-found");
+    const data = snapshot.data();
+    const { progress } = getProgressArrays(data);
+    transaction.update(clientRef, {
+      progreso: {
+        ...progress,
+        objetivo: goal.trim(),
+        pesoObjetivo: targetWeight,
+        fechaActualizacion: serverTimestamp(),
+      },
+      objetivo: goal.trim(),
+      pesoObjetivo: targetWeight,
+      fechaUltimoCambio: serverTimestamp(),
+    });
+  });
+}
+
+export async function recordClientWeight(
+  clientId: string,
+  weight: number,
+  date: string,
+) {
+  if (!clientId.trim()) throw new Error("missing-client-id");
+  if (!Number.isFinite(weight) || weight < 20 || weight > 400) {
+    throw new Error("invalid-progress-weight");
+  }
+  if (date !== localProgressDate()) throw new Error("invalid-progress-date");
+
+  const clientRef = doc(db, "clientes", clientId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(clientRef);
+    if (!snapshot.exists()) throw new Error("client-not-found");
+    const data = snapshot.data();
+    const { progress, weights } = getProgressArrays(data);
+    const latestDate = weights
+      .map((value) => progressString(progressRecord(value), "fecha", "date"))
+      .filter((value): value is string => value !== null)
+      .sort()
+      .at(-1) ?? null;
+    const nextAllowedDate = getNextProgressDate(latestDate, 1);
+    if (nextAllowedDate) {
+      throw new Error(`weight-update-too-soon:${nextAllowedDate}`);
+    }
+
+    transaction.update(clientRef, {
+      progreso: {
+        ...progress,
+        pesos: [...weights, { peso: weight, fecha: date }],
+        fechaActualizacion: serverTimestamp(),
+      },
+      peso: weight,
+      fechaUltimoCambio: serverTimestamp(),
+    });
+  });
+}
+
+export async function recordClientMeasurements(
+  clientId: string,
+  measurements: Omit<ClientMeasurementEntry, "date">,
+  date: string,
+) {
+  if (!clientId.trim()) throw new Error("missing-client-id");
+  if (date !== localProgressDate()) throw new Error("invalid-progress-date");
+  const values = Object.values(measurements).filter(
+    (value): value is number => value !== undefined,
+  );
+  if (
+    values.length === 0 ||
+    values.some((value) => !Number.isFinite(value) || value < 10 || value > 250)
+  ) {
+    throw new Error("invalid-progress-measurements");
+  }
+
+  const clientRef = doc(db, "clientes", clientId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(clientRef);
+    if (!snapshot.exists()) throw new Error("client-not-found");
+    const data = snapshot.data();
+    const { progress, measurements: storedMeasurements } = getProgressArrays(data);
+    const latestDate = storedMeasurements
+      .map((value) => progressString(progressRecord(value), "fecha", "date"))
+      .filter((value): value is string => value !== null)
+      .sort()
+      .at(-1) ?? null;
+    const nextAllowedDate = getNextProgressDate(latestDate, 7);
+    if (nextAllowedDate) {
+      throw new Error(`measurements-update-too-soon:${nextAllowedDate}`);
+    }
+
+    transaction.update(clientRef, {
+      progreso: {
+        ...progress,
+        medidas: [
+          ...storedMeasurements,
+          {
+            fecha: date,
+            ...(measurements.waist !== undefined ? { cintura: measurements.waist } : {}),
+            ...(measurements.hip !== undefined ? { cadera: measurements.hip } : {}),
+            ...(measurements.arms !== undefined ? { brazos: measurements.arms } : {}),
+            ...(measurements.thighs !== undefined ? { muslos: measurements.thighs } : {}),
+          },
+        ],
+        fechaActualizacion: serverTimestamp(),
+      },
+      fechaUltimoCambio: serverTimestamp(),
+    });
+  });
 }
 
 export async function updateClientProfile(

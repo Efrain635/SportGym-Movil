@@ -63,6 +63,14 @@ La PWA debe usar estos mismos campos para consultar o mostrar el historial del c
 
 ## Chatbot y rutinas personalizadas
 
+Sporti responde preguntas sobre ejercicios, rutinas, máquinas, alimentos y platillos nicaragüenses, proteínas, creatina, calentamiento y estiramientos mediante Gemini. Para habilitar las respuestas:
+
+1. Crea una clave de Gemini en Google AI Studio.
+2. En la raíz del proyecto, crea `.env` a partir de `.env.example` y reemplaza el valor de `EXPO_PUBLIC_GEMINI_API_KEY` con tu clave.
+3. Detén Expo y vuelve a iniciarlo con `npx expo start --clear`.
+
+No publiques ni compartas tu archivo `.env`. Las variables `EXPO_PUBLIC_` se incluyen en el bundle de la app, por lo que esta configuración es adecuada para desarrollo; para producción, protege el acceso a Gemini mediante un backend.
+
 Las conversaciones de Sporti se guardan en `conversaciones_chatbot/{conversationId}` y sus mensajes en la subcolección `mensajes`. Cada documento de conversación incluye el ID del cliente, el objetivo, las respuestas del cuestionario y el paso actual para poder reabrir y continuar el chat. El historial se consulta para el cliente que inició sesión.
 
 Al completar el cuestionario, Sporti crea un plan semanal usando ejercicios del catálogo local y guarda cada ejercicio en `rutinas` con el mismo formato que los ejercicios añadidos manualmente (`clienteId`, `ejercicioId`, `ejercicioNombre`, `dia`, `equipo`, `grupoMuscular`, `seriesAsignadas` y `repeticionesAsignadas`). La rutina también queda escrita como respuesta en el historial del chat. Desde Mi rutina se puede abrir el día correspondiente y ajustar series y repeticiones antes de entrenar; los cambios se guardan en Firestore.

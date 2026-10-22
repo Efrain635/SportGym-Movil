@@ -13,7 +13,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useAttendance } from '../lib/attendance';
 
-type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición' | 'Perfil';
+type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';
 type ProfileSection = 'data' | 'membership' | 'progress';
 type ProfileDraft = {
   firstName: string;
@@ -139,7 +139,7 @@ export default function ProfileView() {
     weekTotal,
     attendanceError,
   } = useAttendance(user?.clientId ?? null);
-  const [activeTab, setActiveTab] = useState<TabName>('Perfil');
+  const [activeTab, setActiveTab] = useState<TabName | null>(null);
   const [expandedSection, setExpandedSection] =
     useState<ProfileSection | null>('progress');
   const [workoutProgress, setWorkoutProgress] = useState({
@@ -304,9 +304,6 @@ export default function ProfileView() {
         break;
       case 'Nutrición':
         router.navigate('/(tabs)/nutrition');
-        break;
-      case 'Perfil':
-        router.navigate('/(tabs)/profile');
         break;
     }
   };
@@ -563,6 +560,16 @@ export default function ProfileView() {
                   <ThemedText style={styles.progressText}>
                     {weekTotal} {weekTotal === 1 ? 'asistencia esta semana' : 'asistencias esta semana'}
                   </ThemedText>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => router.navigate('/(tabs)/progress')}
+                    style={styles.fullProgressButton}
+                  >
+                    <ThemedText style={styles.fullProgressButtonText}>
+                      Ver progreso completo
+                    </ThemedText>
+                    <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+                  </Pressable>
                 </View>
               )}
             </View>
@@ -625,14 +632,6 @@ export default function ProfileView() {
               active={activeTab === 'Nutrición'}
               onPress={() => handleTabPress('Nutrición')}
             />
-            <BottomTab
-              label="Perfil"
-              icon="person-outline"
-              activeIcon="person"
-              active={activeTab === 'Perfil'}
-              onPress={() => handleTabPress('Perfil')}
-            />
-
           </View>
 
         </View>
@@ -1135,6 +1134,23 @@ const styles = StyleSheet.create({
   progressText: {
     color: '#AFAFAF',
     fontSize: 13,
+  },
+
+  fullProgressButton: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 9,
+    backgroundColor: SportGymColors.primary,
+    marginTop: 12,
+  },
+
+  fullProgressButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 
   // ===================================================
