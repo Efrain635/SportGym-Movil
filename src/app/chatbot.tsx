@@ -3,6 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
     Animated,
     FlatList,
@@ -21,6 +22,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
     createClientChatConversation,
+    deleteClientChatConversation,
     getChatConversationMessages,
     getClientChatConversations,
     saveChatConversationMessage,
@@ -266,6 +268,7 @@ export default function ChatbotScreen() {
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
+  const [isPreparingRecipes, setIsPreparingRecipes] = useState(false);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   useEffect(() => {
@@ -650,28 +653,51 @@ export default function ChatbotScreen() {
   };
 
   const deleteConversation = async (idToDelete: string) => {
+    const confirmDeletion = async () => {
+      try {
+        if (!user?.clientId) {
+          throw new Error("Debes iniciar sesión para eliminar conversaciones.");
+        }
+        await deleteClientChatConversation(user.clientId, idToDelete);
+        setConversations((current) =>
+          current.filter((conv) => conv.id !== idToDelete)
+        );
+        if (conversationId === idToDelete) {
+          setConversationId(null);
+          setInput("");
+          resetConversationState();
+          setShowHistory(false);
+        }
+      } catch (error) {
+        const details =
+          error instanceof Error ? error.message : "Error desconocido.";
+        console.error("No se pudo eliminar la conversación:", error);
+        Alert.alert(
+          "No se pudo eliminar",
+          details,
+        );
+      }
+    };
+
+    const confirmationMessage =
+      "¿Estás seguro de que quieres eliminar esta conversación?";
+
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm(confirmationMessage)) {
+        await confirmDeletion();
+      }
+      return;
+    }
+
     Alert.alert(
       "Eliminar conversación",
-      "¿Estás seguro de que quieres eliminar esta conversación?",
+      confirmationMessage,
       [
         { text: "Cancelar", style: "cancel" },
         {
           text: "Eliminar",
           style: "destructive",
-          onPress: async () => {
-            try {
-              // Note: You would need to implement deleteChatConversation in firebase.ts
-              setConversations((current) =>
-                current.filter((conv) => conv.id !== idToDelete)
-              );
-              if (conversationId === idToDelete) {
-                void startNewConversation();
-              }
-            } catch (error) {
-              console.error("No se pudo eliminar la conversación:", error);
-              Alert.alert("Error", "No se pudo eliminar la conversación");
-            }
-          },
+          onPress: () => void confirmDeletion(),
         },
       ]
     );
@@ -882,35 +908,8 @@ export default function ChatbotScreen() {
             );
           }
 
-          if (s.user?.clientId && s.userGoal) {
-            try {
-              const recommendedRecipes =
-                await getRecipesForNutritionFocus(s.userGoal);
-              if (recommendedRecipes.length > 0) {
-                await saveFavoriteRecipes(s.user.clientId, recommendedRecipes);
-                nutritionMessage =
-                  `\n\nTambién guardé ${recommendedRecipes.length} receta(s) en tus favoritos de Nutrición para tu enfoque de ${s.userGoal.toLowerCase()}:\n` +
-                  recommendedRecipes.map((recipe) => `• ${recipe.name}`).join("\n");
-              } else {
-                nutritionMessage =
-                  `\n\nNo encontré recetas en el catálogo etiquetadas para ${s.userGoal.toLowerCase()}. No guardé recetas que no correspondan a tu enfoque.`;
-              }
-            } catch (error) {
-              console.error(
-                "No se pudieron guardar las recetas recomendadas:",
-                error,
-              );
-              nutritionMessage =
-                "\n\nNo pude guardar las recetas recomendadas en tus favoritos. Revisa tu conexión e inténtalo de nuevo.";
-              Alert.alert(
-                "No se guardaron las recetas",
-                "La rutina está lista, pero no se pudieron actualizar tus favoritos de Nutrición.",
-              );
-            }
-          } else {
-            nutritionMessage =
-              "\n\nInicia sesión como cliente para guardar recetas en tus favoritos de Nutrición.";
-          }
+          nutritionMessage =
+            "\n\nCuando pulses “Ver recetas”, Sporti buscará en el recetario opciones para tu objetivo y las guardará en Mis recetas.";
 
           const routineText = formatChatbotRoutine(
             routine,
@@ -997,6 +996,50 @@ export default function ChatbotScreen() {
     sendMessage(title);
   }, [sendMessage]);
 
+  const openRecommendedRecipes = async () => {
+    const { user: currentUser, userGoal: currentGoal } = stateRef.current;
+    if (!currentUser?.clientId) {
+      Alert.alert(
+        "Inicia sesión para guardar recetas",
+        "Necesitas una cuenta de cliente para que Sporti guarde tus recomendaciones en Mis recetas.",
+      );
+      return;
+    }
+
+    if (!currentGoal) {
+      Alert.alert(
+        "No se encontró tu objetivo",
+        "Vuelve a crear tu rutina para recibir recomendaciones de recetas.",
+      );
+      return;
+    }
+
+    setIsPreparingRecipes(true);
+    try {
+      const recommendedRecipes =
+        await getRecipesForNutritionFocus(currentGoal);
+      if (recommendedRecipes.length > 0) {
+        await saveFavoriteRecipes(currentUser.clientId, recommendedRecipes);
+      }
+
+      router.navigate("/(tabs)/nutrition?view=favorites" as never);
+      if (recommendedRecipes.length === 0) {
+        Alert.alert(
+          "No encontramos recetas para este objetivo",
+          "No hay recetas etiquetadas para tu objetivo en el recetario. Puedes explorar el catálogo y agregar recetas manualmente.",
+        );
+      }
+    } catch (error) {
+      console.error("No se pudieron preparar las recetas recomendadas:", error);
+      Alert.alert(
+        "No se pudieron guardar las recetas",
+        "Sporti no pudo cargar o guardar las recetas del recetario. Revisa tu conexión e inténtalo de nuevo.",
+      );
+    } finally {
+      setIsPreparingRecipes(false);
+    }
+  };
+
   const renderFooter = () => {
     if (isLoading) {
       return (
@@ -1039,22 +1082,29 @@ export default function ChatbotScreen() {
 
           <Pressable
             style={styles.summaryCard}
-            onPress={() => {
-              router.navigate("/(tabs)/nutrition?view=favorites" as never);
-            }}
+            onPress={() => void openRecommendedRecipes()}
+            disabled={isPreparingRecipes}
           >
             <View style={styles.summaryCardHeader}>
-              <Ionicons name="restaurant" size={32} color={GREEN} />
+              {isPreparingRecipes ? (
+                <ActivityIndicator size="large" color={GREEN} />
+              ) : (
+                <Ionicons name="restaurant" size={32} color={GREEN} />
+              )}
               <View style={styles.summaryCardHeaderText}>
-                <Text style={styles.summaryCardTitle}>Recetas para tu enfoque</Text>
+                <Text style={styles.summaryCardTitle}>Mis recetas</Text>
                 <Text style={styles.summaryCardSubtitle}>
-                  Guardadas en tus favoritos de Nutrición
+                  Recomendadas para tu objetivo. Agrega más desde Nutrición.
                 </Text>
               </View>
             </View>
             <View style={styles.summaryCardFooter}>
-              <Text style={styles.summaryCardButtonText}>Ver recetas favoritas</Text>
-              <Ionicons name="arrow-forward" size={20} color={GREEN} />
+              <Text style={styles.summaryCardButtonText}>
+                {isPreparingRecipes ? "Preparando recetas..." : "Ver recetas"}
+              </Text>
+              {!isPreparingRecipes && (
+                <Ionicons name="arrow-forward" size={20} color={GREEN} />
+              )}
             </View>
           </Pressable>
 

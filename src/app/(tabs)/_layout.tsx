@@ -68,6 +68,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Icon name="person" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="progress"
+        options={{
+          title: "Mi progreso",
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
