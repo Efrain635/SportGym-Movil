@@ -344,19 +344,6 @@ export default function ProgressView() {
       case 'Resumen':
         return (
           <>
-            <View style={styles.tabs}>
-              {(['Resumen', 'Gráficas', 'Logros'] as ProgressTab[]).map((tab) => (
-                <Pressable
-                  key={tab}
-                  onPress={() => setPage(tab)}
-                  style={[styles.tab, tab === page && styles.tabActive]}
-                >
-                  <ThemedText style={[styles.tabText, tab === page && styles.tabTextActive]}>
-                    {tab}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
             <View style={styles.goalCard}>
               <View style={styles.row}>
                 <View style={styles.heroIcon}>
@@ -440,7 +427,7 @@ export default function ProgressView() {
             <Card title="Medidas corporales" action="Registrar" onAction={() => navigate('Medidas')}>
               {clientHistory.measurements.length
                 ? <MeasurementTrends entries={clientHistory.measurements} />
-                : <ThemedText style={styles.bodyText}>Registra medidas para ver cómo cambian con el tiempo.</ThemedText>}
+                : <Empty title="Aún no hay medidas" text="Guarda tus medidas para comparar su evolución aquí." icon="body-outline" action="Registrar medidas" onAction={() => navigate('Medidas')} />}
             </Card>
           </>
         );
@@ -453,6 +440,19 @@ export default function ProgressView() {
               <Stat icon="flame-outline" label="Racha" value={`${attendance.currentStreak} d`} />
             </View>
             <Card title="Logros de ejercicios">
+              <View style={styles.achievementSummary}>
+                <View style={styles.achievementSummaryIcon}>
+                  <Ionicons name="trophy-outline" size={20} color={SportGymColors.success} />
+                </View>
+                <View style={styles.flex}>
+                  <ThemedText style={styles.rowTitle}>
+                    {achievementList.filter((item) => clientWorkouts.totalExercises >= item.count).length} de {achievementList.length} logros desbloqueados
+                  </ThemedText>
+                  <ThemedText style={styles.labelSmall}>
+                    {clientWorkouts.totalExercises} ejercicios completados
+                  </ThemedText>
+                </View>
+              </View>
               {achievementList.map((item) => {
                 const unlocked = clientWorkouts.totalExercises >= item.count;
                 return (
@@ -662,6 +662,12 @@ export default function ProgressView() {
           {clientId ? (
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
               {isLoadingHistory && <Loading />}
+              {(['Resumen', 'Gráficas', 'Logros'] as ProgressTab[]).includes(page as ProgressTab) && (
+                <ProgressNavigation
+                  page={page as ProgressTab}
+                  onSelect={setPage}
+                />
+              )}
               {content}
               <View style={styles.bottomSpace} />
             </ScrollView>
@@ -696,6 +702,44 @@ function Card({
       </View>
       <View style={styles.cardBody}>{children}</View>
     </View>
+  );
+}
+
+function ProgressNavigation({
+  page,
+  onSelect,
+}: {
+  page: ProgressTab;
+  onSelect: (tab: ProgressTab) => void;
+}) {
+  const descriptions: Record<ProgressTab, string> = {
+    Resumen: 'Un vistazo claro a tus entrenamientos y metas.',
+    Gráficas: 'Compara tus sesiones y cambios corporales con el tiempo.',
+    Logros: 'Celebra cada paso: tus hitos se desbloquean al avanzar.',
+  };
+
+  return (
+    <>
+      <View style={styles.tabs}>
+        {(['Resumen', 'Gráficas', 'Logros'] as ProgressTab[]).map((tab) => (
+          <Pressable
+            key={tab}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === page }}
+            onPress={() => onSelect(tab)}
+            style={[styles.tab, tab === page && styles.tabActive]}
+          >
+            <ThemedText style={[styles.tabText, tab === page && styles.tabTextActive]}>
+              {tab}
+            </ThemedText>
+          </Pressable>
+        ))}
+      </View>
+      <View style={styles.sectionHint}>
+        <Ionicons name="sparkles-outline" size={16} color={SportGymColors.success} />
+        <ThemedText style={styles.sectionHintText}>{descriptions[page]}</ThemedText>
+      </View>
+    </>
   );
 }
 
@@ -774,17 +818,44 @@ function ProgressMeter({ current, initial, target }: { current: number | null; i
 
 function BarChart({ values, labels }: { values: number[]; labels: string[] }) {
   const max = Math.max(1, ...values);
+  const total = values.reduce((sum, value) => sum + value, 0);
+  const bestDayIndex = values.indexOf(Math.max(...values));
+  const todayIndex = (new Date().getDay() + 6) % 7;
   return (
-    <View style={styles.barChart}>
-      {labels.map((label, index) => (
-        <View key={label} style={styles.barColumn}>
-          <ThemedText style={styles.barValue}>{values[index] || ''}</ThemedText>
-          <View style={styles.barTrack}>
-            {values[index] > 0 && <View style={[styles.barFill, { height: `${Math.max(12, (values[index] / max) * 100)}%` }]} />}
-          </View>
-          <ThemedText style={styles.barLabel}>{label}</ThemedText>
+    <View>
+      <View style={styles.chartSummary}>
+        <View>
+          <ThemedText style={styles.chartSummaryValue}>{total}</ThemedText>
+          <ThemedText style={styles.chartSummaryLabel}>{total === 1 ? 'sesión esta semana' : 'sesiones esta semana'}</ThemedText>
         </View>
-      ))}
+        {total > 0 && (
+          <View style={styles.chartHighlight}>
+            <Ionicons name="flash-outline" size={14} color={SportGymColors.success} />
+            <ThemedText style={styles.chartHighlightText}>Más activo: {labels[bestDayIndex]}</ThemedText>
+          </View>
+        )}
+      </View>
+      <View style={styles.barChart}>
+        {labels.map((label, index) => (
+          <View key={label} style={styles.barColumn}>
+            <ThemedText style={styles.barValue}>{values[index] || ''}</ThemedText>
+            <View style={styles.barTrack}>
+              {values[index] > 0 && (
+                <View
+                  style={[
+                    styles.barFill,
+                    index === todayIndex && styles.barFillToday,
+                    { height: `${Math.max(12, (values[index] / max) * 100)}%` },
+                  ]}
+                />
+              )}
+            </View>
+            <ThemedText style={[styles.barLabel, index === todayIndex && styles.barLabelToday]}>
+              {label}
+            </ThemedText>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -794,17 +865,47 @@ function WeightChart({ weights }: { weights: ClientProgressHistory['weights'] })
   const min = Math.min(...values.map((entry) => entry.weight));
   const max = Math.max(...values.map((entry) => entry.weight));
   const range = Math.max(1, max - min);
+  const change = values.at(-1)!.weight - values[0].weight;
   return (
-    <View style={styles.weightChart}>
-      {values.map((entry, index) => (
-        <View key={`${entry.date}-${index}`} style={styles.weightColumn}>
-          <ThemedText style={styles.barValue}>{formatNumber(entry.weight)}</ThemedText>
-          <View style={styles.weightTrack}>
-            <View style={[styles.weightBar, { height: `${Math.max(16, 25 + ((entry.weight - min) / range) * 75)}%` }]} />
-          </View>
-          <ThemedText style={styles.weightDate}>{formatDate(entry.date).slice(0, 6)}</ThemedText>
+    <View>
+      <View style={styles.weightSummary}>
+        <View>
+          <ThemedText style={styles.chartSummaryValue}>{formatNumber(values.at(-1)!.weight)} kg</ThemedText>
+          <ThemedText style={styles.chartSummaryLabel}>último registro · {formatDate(values.at(-1)!.date)}</ThemedText>
         </View>
-      ))}
+        <View style={styles.weightChange}>
+          <Ionicons
+            name={change === 0 ? 'remove-outline' : change < 0 ? 'arrow-down-outline' : 'arrow-up-outline'}
+            size={15}
+            color={SportGymColors.success}
+          />
+          <ThemedText style={styles.weightChangeText}>
+            {change === 0 ? 'Sin cambio' : `${change > 0 ? '+' : ''}${formatNumber(change)} kg`}
+          </ThemedText>
+        </View>
+      </View>
+      <View style={styles.chartRange}>
+        <ThemedText style={styles.chartRangeLabel}>Rango: {formatNumber(min)}–{formatNumber(max)} kg</ThemedText>
+        <ThemedText style={styles.chartRangeLabel}>Más reciente →</ThemedText>
+      </View>
+      <View style={styles.weightChart}>
+        {values.map((entry, index) => (
+          <View key={`${entry.date}-${index}`} style={styles.weightColumn}>
+            <ThemedText style={styles.barValue}>{formatNumber(entry.weight)}</ThemedText>
+            <View style={styles.weightTrack}>
+              <View
+                style={[
+                  styles.weightBar,
+                  index === values.length - 1 && styles.weightBarLatest,
+                  { height: `${Math.max(16, 25 + ((entry.weight - min) / range) * 75)}%` },
+                ]}
+              />
+            </View>
+            <ThemedText style={styles.weightDate}>{formatDate(entry.date).slice(0, 6)}</ThemedText>
+          </View>
+        ))}
+      </View>
+      <ThemedText style={styles.caption}>Cada barra es un registro de peso en kilogramos.</ThemedText>
     </View>
   );
 }
@@ -813,18 +914,41 @@ function MeasurementTrends({ entries }: { entries: ClientMeasurementEntry[] }) {
   return (
     <View style={styles.trends}>
       {measurementFields.flatMap((field) => {
-        const records = entries.flatMap((entry) => entry[field.key] === undefined ? [] : [entry[field.key]!]).slice(-6);
+        const measuredEntries = entries.filter((entry) => entry[field.key] !== undefined).slice(-6);
+        const records = measuredEntries.map((entry) => entry[field.key]!);
         if (!records.length) return [];
         const min = Math.min(...records);
         const max = Math.max(...records);
         const range = Math.max(1, max - min);
+        const change = records.length > 1 ? records.at(-1)! - records.at(-2)! : null;
         return (
           <View key={field.key} style={styles.trend}>
-            <ThemedText style={styles.metricLabel}>{field.label}</ThemedText>
-            <View style={styles.sparkline}>
-              {records.map((value, index) => <View key={index} style={[styles.sparkBar, { height: `${Math.max(20, 30 + ((value - min) / range) * 70)}%` }]} />)}
+            <View style={styles.trendHeading}>
+              <View>
+                <ThemedText style={styles.metricLabel}>{field.label}</ThemedText>
+                <ThemedText style={styles.labelSmall}>
+                  {change === null
+                    ? `Último registro · ${formatDate(measuredEntries.at(-1)!.date)}`
+                    : `${change > 0 ? '+' : ''}${formatNumber(change)} cm desde el registro anterior`}
+                </ThemedText>
+              </View>
+              <ThemedText style={styles.metricValue}>{formatNumber(records.at(-1)!)} cm</ThemedText>
             </View>
-            <ThemedText style={styles.metricValue}>{formatNumber(records.at(-1)!)} cm</ThemedText>
+            <View style={styles.sparkline}>
+              {records.map((value, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.sparkBar,
+                    index === records.length - 1 && styles.sparkBarLatest,
+                    { height: `${Math.max(20, 30 + ((value - min) / range) * 70)}%` },
+                  ]}
+                />
+              ))}
+            </View>
+            <ThemedText style={styles.chartRangeLabel}>
+              {formatDate(measuredEntries[0].date)} — {formatDate(measuredEntries.at(-1)!.date)}
+            </ThemedText>
           </View>
         );
       })}
@@ -947,19 +1071,21 @@ function Loading() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#090A0A' },
+  screen: { flex: 1, backgroundColor: '#080A08' },
   safeArea: { flex: 1 },
-  frame: { flex: 1, marginHorizontal: 5, marginBottom: 4, borderWidth: 2, borderColor: '#4A4A4A', borderRadius: 24, backgroundColor: '#0B0C0C', overflow: 'hidden' },
-  header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+  frame: { flex: 1, marginHorizontal: 5, marginBottom: 4, borderWidth: 1, borderColor: '#303B32', borderRadius: 24, backgroundColor: '#0B0E0B', overflow: 'hidden' },
+  header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1E261F' },
   back: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { color: '#F2F2F2', fontSize: 17, fontWeight: '800', textAlign: 'center' },
-  content: { paddingHorizontal: 15, paddingTop: 7, paddingBottom: 16, gap: 12 },
-  tabs: { flexDirection: 'row', gap: 4, padding: 4, borderRadius: 11, backgroundColor: '#191D1A' },
-  tab: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
-  tabActive: { backgroundColor: SportGymColors.primary },
+  content: { paddingHorizontal: 15, paddingTop: 12, paddingBottom: 16, gap: 13 },
+  tabs: { flexDirection: 'row', gap: 5, padding: 5, borderRadius: 13, backgroundColor: '#151A16', borderWidth: 1, borderColor: '#29322B' },
+  tab: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
+  tabActive: { backgroundColor: '#285C37', borderWidth: 1, borderColor: '#4C9A3A' },
   tabText: { color: '#AEB4B0', fontSize: 12, fontWeight: '700' },
   tabTextActive: { color: '#FFFFFF' },
-  goalCard: { padding: 16, borderRadius: 15, backgroundColor: '#12301E', borderWidth: 1, borderColor: '#285C38' },
+  sectionHint: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, paddingVertical: 1 },
+  sectionHintText: { flex: 1, color: '#AEB9B0', fontSize: 11, lineHeight: 16 },
+  goalCard: { padding: 17, borderRadius: 17, backgroundColor: '#14291A', borderWidth: 1, borderColor: '#355C3B' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heroIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: SportGymColors.primary, justifyContent: 'center', alignItems: 'center' },
   flex: { flex: 1 },
@@ -971,40 +1097,57 @@ const styles = StyleSheet.create({
   weightLarge: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginTop: 4 },
   alignRight: { alignItems: 'flex-end' },
   stats: { flexDirection: 'row', gap: 8 },
-  stat: { flex: 1, minHeight: 88, alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 4, borderRadius: 12, backgroundColor: '#191D1A', borderWidth: 1, borderColor: '#2B302C' },
+  stat: { flex: 1, minHeight: 88, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4, borderRadius: 14, backgroundColor: '#151A16', borderWidth: 1, borderColor: '#29332B' },
   statValue: { color: '#F1F3F1', fontSize: 18, fontWeight: '800' },
   statLabel: { color: '#AEB4B0', fontSize: 10, fontWeight: '600', textAlign: 'center' },
-  card: { padding: 14, borderRadius: 14, backgroundColor: '#191D1A', borderWidth: 1, borderColor: '#2B302C' },
+  card: { padding: 15, borderRadius: 16, backgroundColor: '#151A16', borderWidth: 1, borderColor: '#29332B' },
   cardHeading: { minHeight: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 },
   cardTitle: { flex: 1, color: '#F2F4F2', fontSize: 15, fontWeight: '800' },
   actionText: { color: '#91D174', fontSize: 12, fontWeight: '700' },
-  cardBody: { gap: 11 },
+  cardBody: { gap: 12 },
   bodyText: { color: '#B5BCB7', fontSize: 12, lineHeight: 18 },
   actionRow: { flexDirection: 'row', gap: 8 },
   actionButton: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 5, borderRadius: 9, borderWidth: 1, borderColor: '#3B5B40', backgroundColor: '#142119' },
   actionButtonText: { color: '#E9F0EB', fontSize: 11, fontWeight: '700' },
   meterGroup: { gap: 7 },
-  meterTrack: { height: 8, borderRadius: 5, overflow: 'hidden', backgroundColor: '#343A36' },
-  meterFill: { height: '100%', borderRadius: 5, backgroundColor: SportGymColors.success },
-  barChart: { height: 110, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', gap: 7 },
+  meterTrack: { height: 10, borderRadius: 6, overflow: 'hidden', backgroundColor: '#303A32' },
+  meterFill: { height: '100%', borderRadius: 6, backgroundColor: SportGymColors.success },
+  chartSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 15 },
+  chartSummaryValue: { color: '#F1F5F1', fontSize: 22, fontWeight: '900' },
+  chartSummaryLabel: { color: '#A3ADA5', fontSize: 10, fontWeight: '600', marginTop: 2 },
+  chartHighlight: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 20, backgroundColor: '#213328' },
+  chartHighlightText: { color: '#D6E7D8', fontSize: 10, fontWeight: '700' },
+  barChart: { height: 124, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', gap: 7, paddingTop: 4 },
   barColumn: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   barValue: { height: 14, color: '#E2E7E3', fontSize: 9, fontWeight: '700' },
-  barTrack: { width: '75%', height: 67, justifyContent: 'flex-end', overflow: 'hidden', borderRadius: 5, backgroundColor: '#2B322D' },
-  barFill: { width: '100%', borderRadius: 5, backgroundColor: '#52B679' },
+  barTrack: { width: '72%', height: 78, justifyContent: 'flex-end', overflow: 'hidden', borderRadius: 7, backgroundColor: '#27302A' },
+  barFill: { width: '100%', borderRadius: 7, backgroundColor: '#4C9A3A' },
+  barFillToday: { backgroundColor: '#A0D65E' },
   barLabel: { color: '#A3AAA5', fontSize: 10, fontWeight: '600' },
+  barLabelToday: { color: '#A0D65E', fontWeight: '800' },
   caption: { color: '#949C96', fontSize: 10, textAlign: 'center', marginTop: 7 },
+  weightSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14 },
+  weightChange: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 20, backgroundColor: '#213328' },
+  weightChangeText: { color: '#D6E7D8', fontSize: 10, fontWeight: '800' },
+  chartRange: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 7 },
+  chartRangeLabel: { color: '#8F9A91', fontSize: 9 },
   weightChart: { height: 145, flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
   weightColumn: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'flex-end', gap: 5 },
-  weightTrack: { width: '75%', height: 98, justifyContent: 'flex-end', overflow: 'hidden', borderRadius: 5, backgroundColor: '#2B322D' },
-  weightBar: { width: '100%', borderRadius: 5, backgroundColor: '#52B679' },
+  weightTrack: { width: '75%', height: 98, justifyContent: 'flex-end', overflow: 'hidden', borderRadius: 6, backgroundColor: '#27302A' },
+  weightBar: { width: '100%', borderRadius: 6, backgroundColor: '#4C9A3A' },
+  weightBarLatest: { backgroundColor: '#A0D65E' },
   weightDate: { color: '#A3AAA5', fontSize: 8, textAlign: 'center' },
-  trends: { gap: 12 },
-  trend: { gap: 5 },
-  sparkline: { height: 34, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  sparkBar: { flex: 1, borderTopLeftRadius: 4, borderTopRightRadius: 4, backgroundColor: '#52B679' },
+  trends: { gap: 16 },
+  trend: { gap: 7, paddingBottom: 11, borderBottomWidth: 1, borderBottomColor: '#29332B' },
+  trendHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 7 },
+  sparkline: { height: 38, flexDirection: 'row', alignItems: 'flex-end', gap: 5, paddingHorizontal: 2 },
+  sparkBar: { flex: 1, borderTopLeftRadius: 4, borderTopRightRadius: 4, backgroundColor: '#4C9A3A' },
+  sparkBarLatest: { backgroundColor: '#A0D65E' },
   metricLabel: { color: '#E2E6E3', fontSize: 12, fontWeight: '700' },
   metricValue: { color: '#91D174', fontSize: 13, fontWeight: '800' },
   achievement: { minHeight: 53, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: '#2B302C' },
+  achievementSummary: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 11, marginBottom: 4, borderRadius: 12, backgroundColor: '#1C2A20', borderWidth: 1, borderColor: '#304B35' },
+  achievementSummaryIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#293E2D' },
   achievementIcon: { width: 35, height: 35, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#2B302C' },
   achievementUnlocked: { backgroundColor: '#263A2A' },
   rowTitle: { color: '#F0F2F0', fontSize: 12, fontWeight: '700', marginBottom: 3 },
