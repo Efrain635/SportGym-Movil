@@ -2,12 +2,70 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function ownsClient(clientId) {
+      let clientPath = /databases/$(database)/documents/clientes/$(clientId);
+      return request.auth != null
+        && (
+          request.auth.uid == clientId
+          || (
+            exists(clientPath)
+            && (
+              (
+                get(clientPath).data.keys().hasAny(["correo"])
+                && get(clientPath).data.correo == request.auth.token.email
+              )
+              || (
+                get(clientPath).data.keys().hasAny(["email"])
+                && get(clientPath).data.email == request.auth.token.email
+              )
+            )
+          )
+        );
+    }
+
     match /productos/{document=**} {
       allow read: if true;
     }
 
     match /recetas/{document=**} {
       allow read: if true;
+    }
+
+    match /favoritos_recetas/{favoriteId} {
+      allow create, update: if request.resource.data.clienteId is string
+        && request.resource.data.recetaId is string
+        && favoriteId
+          == request.resource.data.clienteId
+            + "_"
+            + request.resource.data.recetaId
+        && ownsClient(request.resource.data.clienteId);
+
+      allow delete: if ownsClient(resource.data.clienteId);
+    }
+
+    match /conversaciones_chatbot/{conversationId} {
+      allow create: if request.resource.data.clienteId is string
+        && ownsClient(request.resource.data.clienteId);
+
+      allow read, delete: if ownsClient(resource.data.clienteId);
+
+      allow update: if ownsClient(resource.data.clienteId)
+        && request.resource.data.clienteId == resource.data.clienteId;
+
+      match /mensajes/{messageId} {
+        function ownsConversation() {
+          let conversationPath =
+            /databases/$(database)/documents/conversaciones_chatbot/$(conversationId);
+          return exists(conversationPath)
+            && ownsClient(get(conversationPath).data.clienteId);
+        }
+
+        allow read, delete: if ownsConversation();
+
+        allow create: if ownsConversation()
+          && request.resource.data.from in ["user", "bot"]
+          && request.resource.data.text is string;
+      }
     }
 
     match /{document=**} {
