@@ -1,11 +1,9 @@
 import { SportGymColors } from "@/constants/theme";
 import { Tabs } from "expo-router";
 import { Text, type ColorValue } from "react-native";
-import { AuthProvider } from "../../contexts/AuthContext";
 
 export default function TabLayout() {
   return (
-    <AuthProvider>
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: SportGymColors.primary,
@@ -53,14 +51,12 @@ export default function TabLayout() {
           name="store"
           options={{
             title: "Tienda",
-            href: null,
           }}
         />
         <Tabs.Screen
           name="nutrition"
           options={{
             title: "Nutrición",
-            href: null,
           }}
         />
         <Tabs.Screen
@@ -78,7 +74,6 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
-    </AuthProvider>
   );
 }
 

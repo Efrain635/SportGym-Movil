@@ -15,6 +15,7 @@ import { SportGymColors } from "@/constants/theme";
 import {
   getClientPersonalData,
     getClientMembership,
+    sendClientPasswordResetEmail,
     verifyClientCredentials,
 } from "../../assets/database/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -26,7 +27,44 @@ export default function LoginScreen() {
   const [rememberSession, setRememberSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [isSendingReset, setIsSendingReset] = useState(false);
   const { setUser } = useAuth();
+
+  const handlePasswordReset = async () => {
+    const email = username.trim();
+    if (!email.includes("@")) {
+      setErrorMessage("Escribe tu correo registrado para restablecer la contraseña");
+      setFeedbackMessage("");
+      return;
+    }
+
+    setErrorMessage("");
+    setFeedbackMessage("");
+    setIsSendingReset(true);
+    try {
+      await sendClientPasswordResetEmail(email);
+      setFeedbackMessage(
+        "Si existe una cuenta con ese correo, recibirás un enlace para restablecer tu contraseña.",
+      );
+    } catch (error: unknown) {
+      const errorCode = (error as { code?: string }).code;
+      if (errorCode === "auth/user-not-found") {
+        setFeedbackMessage(
+          "Si existe una cuenta con ese correo, recibirás un enlace para restablecer tu contraseña.",
+        );
+      } else {
+        console.error("No se pudo enviar el restablecimiento de contraseña:", error);
+        setErrorMessage(
+          errorCode === "auth/invalid-email"
+            ? "El correo electrónico no es válido"
+            : "No se pudo enviar el enlace. Revisa tu conexión e inténtalo de nuevo.",
+        );
+      }
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!username.trim()) {
@@ -40,6 +78,7 @@ export default function LoginScreen() {
     }
 
     setErrorMessage("");
+    setFeedbackMessage("");
     setLoading(true);
 
     try {
@@ -139,6 +178,7 @@ export default function LoginScreen() {
                     onChangeText={(value) => {
                       setUsername(value);
                       setErrorMessage("");
+                      setFeedbackMessage("");
                     }}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -155,6 +195,7 @@ export default function LoginScreen() {
                     onChangeText={(value) => {
                       setPassword(value);
                       setErrorMessage("");
+                      setFeedbackMessage("");
                     }}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
@@ -172,6 +213,19 @@ export default function LoginScreen() {
                     </View>
                   </Pressable>
                 </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isSendingReset}
+                  onPress={() => void handlePasswordReset()}
+                  style={styles.forgotContainer}
+                >
+                  <ThemedText style={styles.forgotPassword}>
+                    {isSendingReset
+                      ? "Enviando enlace..."
+                      : "Olvidé mi contraseña"}
+                  </ThemedText>
+                </Pressable>
 
                 {/* RECORDAR SESIÓN */}
                 <Pressable
@@ -193,6 +247,12 @@ export default function LoginScreen() {
                     Recordar sesión
                   </ThemedText>
                 </Pressable>
+
+                {feedbackMessage ? (
+                  <ThemedText style={styles.feedbackMessage}>
+                    {feedbackMessage}
+                  </ThemedText>
+                ) : null}
 
                 {/* BOTÓN LOGIN */}
                 <Pressable
@@ -386,6 +446,13 @@ const styles = StyleSheet.create({
 
   errorSubtitle: {
     color: "#FF6B6B",
+  },
+  feedbackMessage: {
+    color: SportGymColors.primary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 14,
+    textAlign: "center",
   },
 
   // =====================================================

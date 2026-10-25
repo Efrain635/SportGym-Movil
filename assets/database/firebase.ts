@@ -5,6 +5,7 @@ import {
     deleteUser,
     getAuth,
     initializeAuth,
+    sendPasswordResetEmail,
     signInWithEmailAndPassword,
     signOut,
 } from "firebase/auth";
@@ -69,6 +70,10 @@ export const db = initializeFirestore(
   app,
   Platform.OS === "web" ? { experimentalForceLongPolling: true } : {},
 );
+
+export async function sendClientPasswordResetEmail(email: string) {
+  await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+}
 
 type ClientRecord = Record<string, unknown>;
 
@@ -201,14 +206,46 @@ export async function getAuthenticatedClientProfile(
     getDoc(clientReference),
   ]);
 
-  if (!userSnapshot.exists() && !clientSnapshot.exists()) {
+  let clientDocumentId = uid;
+  let matchedClientSnapshot = clientSnapshot;
+
+  if (!clientSnapshot.exists() && authEmail?.trim()) {
+    const normalizedEmail = authEmail.trim().toLowerCase();
+    const [emailFieldSnapshot, correoFieldSnapshot] = await Promise.all([
+      getDocs(
+        query(
+          collection(db, "clientes"),
+          where("email", "==", normalizedEmail),
+          limit(1),
+        ),
+      ),
+      getDocs(
+        query(
+          collection(db, "clientes"),
+          where("correo", "==", normalizedEmail),
+          limit(1),
+        ),
+      ),
+    ]);
+    const matchingDocument =
+      emailFieldSnapshot.docs[0] ?? correoFieldSnapshot.docs[0];
+
+    if (matchingDocument) {
+      clientDocumentId = matchingDocument.id;
+      matchedClientSnapshot = matchingDocument;
+    }
+  }
+
+  if (!userSnapshot.exists() && !matchedClientSnapshot.exists()) {
     return null;
   }
 
   const userData = userSnapshot.exists() ? userSnapshot.data() : {};
-  let clientData = clientSnapshot.exists() ? clientSnapshot.data() : {};
+  let clientData = matchedClientSnapshot.exists()
+    ? matchedClientSnapshot.data()
+    : {};
 
-  if (userSnapshot.exists() && !clientSnapshot.exists()) {
+  if (userSnapshot.exists() && !matchedClientSnapshot.exists()) {
     const username =
       typeof userData.username === "string" ? userData.username : "";
     const email =
@@ -234,7 +271,7 @@ export async function getAuthenticatedClientProfile(
   return {
     ...clientData,
     ...userData,
-    documentId: uid,
+    documentId: clientDocumentId,
     username:
       typeof clientData.usuario === "string"
         ? clientData.usuario

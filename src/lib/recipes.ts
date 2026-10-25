@@ -247,6 +247,7 @@ const nutritionGoalKeywords: Record<string, string[]> = {
   ],
   "Perder grasa": [
     "perdida de peso",
+    "perdida de grasa",
     "perder grasa",
     "definicion",
     "weight loss",
@@ -275,19 +276,21 @@ export async function getRecipesForNutritionFocus(
   const keywords = nutritionGoalKeywords[focus] ?? [focus];
   const normalizedKeywords = keywords.map(normalizeGoal);
   const recipes = await getRecipes();
+  const matchingRecipes = recipes.filter((recipe) =>
+    recipe.objectives.some((objective) => {
+      const normalizedObjective = normalizeGoal(objective);
+      return normalizedKeywords.some(
+        (keyword) =>
+          normalizedObjective.includes(keyword) ||
+          keyword.includes(normalizedObjective),
+      );
+    }),
+  );
 
-  return recipes
-    .filter((recipe) =>
-      recipe.objectives.some((objective) => {
-        const normalizedObjective = normalizeGoal(objective);
-        return normalizedKeywords.some(
-          (keyword) =>
-            normalizedObjective.includes(keyword) ||
-            keyword.includes(normalizedObjective),
-        );
-      }),
-    )
-    .slice(0, maxResults);
+  return (matchingRecipes.length > 0 ? matchingRecipes : recipes).slice(
+    0,
+    maxResults,
+  );
 }
 
 export async function getClientFavoriteRecipes(

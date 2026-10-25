@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /productos/{document=**} {
+      allow read: if true;
+    }
+
+    match /recetas/{document=**} {
+      allow read: if true;
+    }
+
+    match /{document=**} {
+      allow read: if request.auth != null;
+
+      allow write: if request.auth != null
+        && exists(
+          /databases/$(database)/documents/usuarios/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/usuarios/$(request.auth.uid)
+        ).data.rol == 'admin';
+    }
+  }
+}

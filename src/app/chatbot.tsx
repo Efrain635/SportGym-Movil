@@ -998,14 +998,6 @@ export default function ChatbotScreen() {
 
   const openRecommendedRecipes = async () => {
     const { user: currentUser, userGoal: currentGoal } = stateRef.current;
-    if (!currentUser?.clientId) {
-      Alert.alert(
-        "Inicia sesión para guardar recetas",
-        "Necesitas una cuenta de cliente para que Sporti guarde tus recomendaciones en Mis recetas.",
-      );
-      return;
-    }
-
     if (!currentGoal) {
       Alert.alert(
         "No se encontró tu objetivo",
@@ -1018,11 +1010,15 @@ export default function ChatbotScreen() {
     try {
       const recommendedRecipes =
         await getRecipesForNutritionFocus(currentGoal);
-      if (recommendedRecipes.length > 0) {
+      if (currentUser?.clientId && recommendedRecipes.length > 0) {
         await saveFavoriteRecipes(currentUser.clientId, recommendedRecipes);
       }
 
-      router.navigate("/(tabs)/nutrition?view=favorites" as never);
+      if (currentUser?.clientId) {
+        router.navigate("/(tabs)/nutrition?view=favorites" as never);
+      } else {
+        router.navigate("/(tabs)/nutrition" as never);
+      }
       if (recommendedRecipes.length === 0) {
         Alert.alert(
           "No encontramos recetas para este objetivo",
