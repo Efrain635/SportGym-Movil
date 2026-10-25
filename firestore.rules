@@ -31,6 +31,48 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    match /clientes/{clientId} {
+      allow update: if ownsClient(clientId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "asistencias",
+          "rachaAsistencia",
+          "mejorRachaAsistencia",
+          "totalAsistencias"
+        ])
+        && request.resource.data.asistencias is list
+        && request.resource.data.rachaAsistencia is int
+        && request.resource.data.rachaAsistencia >= 0
+        && request.resource.data.mejorRachaAsistencia is int
+        && request.resource.data.mejorRachaAsistencia >= 0
+        && request.resource.data.totalAsistencias is int
+        && request.resource.data.totalAsistencias >= 0;
+    }
+
+    match /asistencias/{attendanceId} {
+      allow create: if request.resource.data.keys().hasAll([
+          "nombreUsuario",
+          "usuario",
+          "hora",
+          "fecha",
+          "cliente",
+          "nombreCliente",
+          "estado"
+        ])
+        && request.resource.data.cliente is string
+        && ownsClient(request.resource.data.cliente)
+        && request.resource.data.fecha is string
+        && request.resource.data.fecha.matches(
+          "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        )
+        && attendanceId
+          == request.resource.data.cliente + "_" + request.resource.data.fecha
+        && request.resource.data.nombreUsuario is string
+        && request.resource.data.usuario is string
+        && request.resource.data.hora is timestamp
+        && request.resource.data.nombreCliente is string
+        && request.resource.data.estado == "presente";
+    }
+
     match /favoritos_recetas/{favoriteId} {
       allow create, update: if request.resource.data.clienteId is string
         && request.resource.data.recetaId is string
