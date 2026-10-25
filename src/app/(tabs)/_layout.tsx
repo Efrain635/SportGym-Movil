@@ -1,81 +1,84 @@
 import { SportGymColors } from "@/constants/theme";
 import { Tabs } from "expo-router";
 import { Text, type ColorValue } from "react-native";
+import { AuthProvider } from "../../contexts/AuthContext";
 
 export default function TabLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: SportGymColors.primary,
-        tabBarInactiveTintColor: "#888888",
-        tabBarStyle: {
-          display: "none",
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "600",
-        },
-        headerShown: false,
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => <Icon name="home" color={color} />,
+    <AuthProvider>
+      <Tabs
+        screenOptions={{
+          tabBarActiveTintColor: SportGymColors.primary,
+          tabBarInactiveTintColor: "#888888",
+          tabBarStyle: {
+            display: "none",
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: "600",
+          },
+          headerShown: false,
         }}
-      />
-      <Tabs.Screen
-        name="routine"
-        options={{
-          title: "Mi rutina",
-          tabBarIcon: ({ color }) => <Icon name="fitness" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="payments"
-        options={{
-          title: "Mis pagos",
-          href: null,
-          tabBarIcon: ({ color }) => <Icon name="payment" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: "Notificaciones",
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="store"
-        options={{
-          title: "Tienda",
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="nutrition"
-        options={{
-          title: "Nutrición",
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Perfil",
-          tabBarIcon: ({ color }) => <Icon name="person" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="progress"
-        options={{
-          title: "Mi progreso",
-          href: null,
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Home",
+            tabBarIcon: ({ color }) => <Icon name="home" color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="routine"
+          options={{
+            title: "Mi rutina",
+            tabBarIcon: ({ color }) => <Icon name="fitness" color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="payments"
+          options={{
+            title: "Mis pagos",
+            href: null,
+            tabBarIcon: ({ color }) => <Icon name="payment" color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="notifications"
+          options={{
+            title: "Notificaciones",
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="store"
+          options={{
+            title: "Tienda",
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="nutrition"
+          options={{
+            title: "Nutrición",
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: "Perfil",
+            tabBarIcon: ({ color }) => <Icon name="person" color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="progress"
+          options={{
+            title: "Mi progreso",
+            href: null,
+          }}
+        />
+      </Tabs>
+    </AuthProvider>
   );
 }
 

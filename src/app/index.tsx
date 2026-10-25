@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import {
     Animated,
     Dimensions,
@@ -7,13 +7,17 @@ import {
     StyleSheet,
     View
 } from "react-native";
+import { useAuth } from "../contexts/AuthContext";
 
 const { width, height } = Dimensions.get("window");
 
 export default function IndexScreen() {
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const [fadeAnim] = useState(() => new Animated.Value(1));
+  const { user, isRestoringSession } = useAuth();
 
   useEffect(() => {
+    if (isRestoringSession) return;
+
     // Animación de salida después de 3 segundos
     const fadeOutAnimation = Animated.timing(fadeAnim, {
       toValue: 0,
@@ -23,7 +27,7 @@ export default function IndexScreen() {
 
     const timer = setTimeout(() => {
       fadeOutAnimation.start(() => {
-        router.replace('/login');
+        router.replace(user ? '/(tabs)' : '/login');
       });
     }, 3000);
 
@@ -31,7 +35,7 @@ export default function IndexScreen() {
       clearTimeout(timer);
       fadeOutAnimation.stop();
     };
-  }, []);
+  }, [fadeAnim, isRestoringSession, user]);
 
   return (
     <Animated.View 

@@ -5,6 +5,8 @@ import {
     deleteUser,
     getAuth,
     initializeAuth,
+    signInWithEmailAndPassword,
+    signOut,
 } from "firebase/auth";
 // @ts-expect-error Firebase's React Native runtime exports this, but its web-facing types do not.
 import { getReactNativePersistence } from "firebase/auth";
@@ -188,6 +190,66 @@ export function getClientMembership(client: ClientRecord) {
   return { plan, startDate, endDate };
 }
 
+export async function getAuthenticatedClientProfile(
+  uid: string,
+  authEmail: string | null,
+): Promise<(DocumentData & { documentId: string }) | null> {
+  const userReference = doc(db, "users", uid);
+  const clientReference = doc(db, "clientes", uid);
+  const [userSnapshot, clientSnapshot] = await Promise.all([
+    getDoc(userReference),
+    getDoc(clientReference),
+  ]);
+
+  if (!userSnapshot.exists() && !clientSnapshot.exists()) {
+    return null;
+  }
+
+  const userData = userSnapshot.exists() ? userSnapshot.data() : {};
+  let clientData = clientSnapshot.exists() ? clientSnapshot.data() : {};
+
+  if (userSnapshot.exists() && !clientSnapshot.exists()) {
+    const username =
+      typeof userData.username === "string" ? userData.username : "";
+    const email =
+      typeof userData.email === "string" ? userData.email : authEmail ?? "";
+    const firstName =
+      typeof userData.firstName === "string" ? userData.firstName : "";
+    const lastName =
+      typeof userData.lastName === "string" ? userData.lastName : "";
+    const phone = typeof userData.phone === "string" ? userData.phone : "";
+
+    clientData = {
+      uid,
+      usuario: username,
+      nombre: firstName,
+      apellido: lastName,
+      correo: email,
+      telefono: phone,
+      asistencias: [],
+    };
+    await setDoc(clientReference, clientData);
+  }
+
+  return {
+    ...clientData,
+    ...userData,
+    documentId: uid,
+    username:
+      typeof clientData.usuario === "string"
+        ? clientData.usuario
+        : typeof userData.username === "string"
+          ? userData.username
+          : authEmail ?? "",
+    email:
+      typeof userData.email === "string"
+        ? userData.email
+        : typeof clientData.correo === "string"
+          ? clientData.correo
+          : authEmail,
+  };
+}
+
 export async function verifyClientCredentials(
   username: string,
   password: string,
@@ -196,6 +258,42 @@ export async function verifyClientCredentials(
 
   if (!normalizedUsername || !password) {
     throw new Error("missing-credentials");
+  }
+
+  const signInRegisteredUser = async (email: string) => {
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    const userData = await getAuthenticatedClientProfile(
+      credential.user.uid,
+      credential.user.email,
+    );
+    if (!userData) {
+      throw new Error("client-profile-not-found");
+    }
+    return userData;
+  };
+
+  if (normalizedUsername.includes("@")) {
+    return signInRegisteredUser(normalizedUsername);
+  }
+
+  let usernameDocument;
+  try {
+    usernameDocument = await getDoc(doc(db, "usernames", normalizedUsername));
+  } catch (error) {
+    if ((error as { code?: string }).code !== "permission-denied") {
+      throw error;
+    }
+  }
+
+  if (usernameDocument?.exists()) {
+    const usernameData = usernameDocument.data();
+    const email = usernameData.email;
+
+    if (typeof email !== "string" || !email.trim()) {
+      throw new Error("invalid-username-record");
+    }
+
+    return signInRegisteredUser(email.trim());
   }
 
   const clientsQuery = query(
@@ -1201,12 +1299,22 @@ export async function registerWithUsername({
         phone: phone.trim(),
         createdAt: serverTimestamp(),
       });
+      transaction.set(doc(db, "clientes", credential.user.uid), {
+        uid: credential.user.uid,
+        usuario: normalizedUsername,
+        nombre: firstName.trim(),
+        apellido: lastName.trim(),
+        correo: normalizedEmail,
+        telefono: phone.trim(),
+        asistencias: [],
+      });
     });
   } catch (error) {
     await deleteUser(credential.user).catch(() => undefined);
     throw error;
   }
 
+  await signOut(auth);
   return credential;
 }
 

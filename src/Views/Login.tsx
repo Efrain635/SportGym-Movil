@@ -1,7 +1,6 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import {
-    Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -26,19 +25,21 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberSession, setRememberSession] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const { setUser } = useAuth();
 
   const handleLogin = async () => {
     if (!username.trim()) {
-      Alert.alert("Error", "Por favor ingresa tu nombre de usuario");
+      setErrorMessage("Por favor ingresa tu nombre de usuario");
       return;
     }
 
     if (!password) {
-      Alert.alert("Error", "Por favor ingresa tu contraseña");
+      setErrorMessage("Por favor ingresa tu contraseña");
       return;
     }
 
+    setErrorMessage("");
     setLoading(true);
 
     try {
@@ -63,13 +64,23 @@ export default function LoginScreen() {
       const errorMessage = (error as { message?: string }).message;
 
       const message =
-        errorMessage === "invalid-credentials"
+        errorMessage === "invalid-credentials" ||
+        errorCode === "auth/invalid-credential" ||
+        errorCode === "auth/user-not-found" ||
+        errorCode === "auth/wrong-password"
           ? "El usuario o la contraseña no coinciden con un cliente registrado"
-          : errorCode === "permission-denied"
-            ? "Firebase no permite consultar la colección clientes. Revisa sus reglas"
+          : errorCode === "permission-denied" ||
+              errorCode === "firestore/permission-denied"
+            ? username.trim().includes("@")
+              ? "Firebase no permite cargar la cuenta. Revisa las reglas de acceso de Firestore"
+              : "No se puede buscar este usuario. Intenta con tu correo electrónico o revisa las reglas de Firestore"
+          : errorMessage === "invalid-username-record"
+            ? "No se pudo validar esta cuenta. Contacta al administrador del gimnasio"
+            : errorMessage === "client-profile-not-found"
+              ? "No se encontró el perfil de esta cuenta. Contacta al administrador del gimnasio"
             : "No fue posible consultar clientes. Verifica tu conexión e inténtalo de nuevo";
 
-      Alert.alert("Error", message);
+      setErrorMessage(message);
     } finally {
       setLoading(false);
     }
@@ -107,8 +118,13 @@ export default function LoginScreen() {
               </View>
 
               {/* SUBTÍTULO */}
-              <ThemedText style={styles.subtitle}>
-                Inicia sesión para continuar
+              <ThemedText
+                style={[
+                  styles.subtitle,
+                  errorMessage && styles.errorSubtitle,
+                ]}
+              >
+                {errorMessage || "Inicia sesión para continuar"}
               </ThemedText>
 
               {/* FORMULARIO */}
@@ -117,10 +133,13 @@ export default function LoginScreen() {
                 <View style={styles.inputContainer}>
                   <TextInput
                     style={styles.input}
-                    placeholder="Nombre de usuario"
+                    placeholder="Usuario o correo electrónico"
                     placeholderTextColor="#777777"
                     value={username}
-                    onChangeText={setUsername}
+                    onChangeText={(value) => {
+                      setUsername(value);
+                      setErrorMessage("");
+                    }}
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
@@ -133,7 +152,10 @@ export default function LoginScreen() {
                     placeholder="Contraseña"
                     placeholderTextColor="#777777"
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(value) => {
+                      setPassword(value);
+                      setErrorMessage("");
+                    }}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -360,6 +382,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
 
     marginBottom: 24,
+  },
+
+  errorSubtitle: {
+    color: "#FF6B6B",
   },
 
   // =====================================================
