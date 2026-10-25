@@ -69,7 +69,6 @@ export default function TabLayout() {
           name="progress"
           options={{
             title: "Mi progreso",
-            href: null,
           }}
         />
       </Tabs>

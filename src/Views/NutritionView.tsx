@@ -725,32 +725,37 @@ function RecipeRow({
   isFavorite?: boolean;
 }) {
   return (
-    <Pressable
-      style={({ pressed }) => [styles.recipeRow, pressed && styles.pressed]}
-      onPress={onPress}
-      accessibilityRole="button"
-    >
-      <RecipeImage
-        uri={recipe.imageUrl}
-        style={styles.rowImage}
-        iconSize={26}
-      />
-      <View style={styles.rowCopy}>
-        <ThemedText style={styles.rowTitle} numberOfLines={1}>
-          {recipe.name}
-        </ThemedText>
-        <ThemedText style={styles.rowCategory} numberOfLines={1}>
-          {recipe.meal ?? recipe.category}
-        </ThemedText>
-        <RecipeMeta recipe={recipe} />
-      </View>
-      {onFavoritePress ? (
+    <View style={styles.recipeRow}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.recipeRowAction,
+          pressed && styles.pressed,
+        ]}
+        onPress={onPress}
+        accessibilityRole="button"
+      >
+        <RecipeImage
+          uri={recipe.imageUrl}
+          style={styles.rowImage}
+          iconSize={26}
+        />
+        <View style={styles.rowCopy}>
+          <ThemedText style={styles.rowTitle} numberOfLines={1}>
+            {recipe.name}
+          </ThemedText>
+          <ThemedText style={styles.rowCategory} numberOfLines={1}>
+            {recipe.meal ?? recipe.category}
+          </ThemedText>
+          <RecipeMeta recipe={recipe} />
+        </View>
+        {!onFavoritePress && (
+          <Ionicons name="chevron-forward" size={19} color="#909790" />
+        )}
+      </Pressable>
+      {onFavoritePress && (
         <Pressable
           style={styles.rowFavorite}
-          onPress={(event) => {
-            event.stopPropagation();
-            onFavoritePress();
-          }}
+          onPress={onFavoritePress}
           accessibilityRole="button"
           accessibilityLabel={
             isFavorite
@@ -764,10 +769,8 @@ function RecipeRow({
             color={isFavorite ? SportGymColors.error : "#9AA09A"}
           />
         </Pressable>
-      ) : (
-        <Ionicons name="chevron-forward" size={19} color="#909790" />
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -1236,12 +1239,18 @@ const styles = StyleSheet.create({
     minHeight: 82,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
     padding: 8,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#303431",
     backgroundColor: "#181B19",
+  },
+  recipeRowAction: {
+    flex: 1,
+    minHeight: 64,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   rowImage: { width: 68, height: 64, borderRadius: 9 },
   rowCopy: { flex: 1, gap: 4 },
