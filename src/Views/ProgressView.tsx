@@ -38,6 +38,7 @@ type ProgressPage =
   | 'Historial';
 type WorkoutProgress = Awaited<ReturnType<typeof getClientWorkoutProgress>>;
 type MeasurementKey = 'waist' | 'hip' | 'arms' | 'thighs';
+type SaveConfirmation = { title: string; message: string };
 
 const goals = [
   { label: 'Perder grasa', icon: 'flame-outline' as const },
@@ -118,6 +119,7 @@ export default function ProgressView() {
   const [targetInput, setTargetInput] = useState('');
   const [weightInput, setWeightInput] = useState(user?.weight?.toString() ?? '');
   const [weightConfirmation, setWeightConfirmation] = useState(false);
+  const [saveConfirmation, setSaveConfirmation] = useState<SaveConfirmation | null>(null);
   const [measurementInput, setMeasurementInput] = useState<Record<MeasurementKey, string>>({
     waist: '',
     hip: '',
@@ -178,6 +180,14 @@ export default function ProgressView() {
     loadedWorkoutId === clientId && !workoutError ? workouts : blankWorkouts;
   const currentWeight =
     clientHistory.weights.at(-1)?.weight ?? user?.weight ?? null;
+  const previousWeight = clientHistory.weights.at(-1)?.weight ?? user?.weight ?? null;
+  const weightComparisonSource =
+    clientHistory.weights.length > 0 ? 'tu último registro' : 'el peso guardado en tu perfil';
+  const parsedWeightInput = Number(weightInput.replace(',', '.'));
+  const weightPreviewChange =
+    previousWeight === null || !Number.isFinite(parsedWeightInput)
+      ? null
+      : parsedWeightInput - previousWeight;
   const targetNumber = Number(targetInput.replace(',', '.'));
   const targetValid =
     targetInput.trim() !== '' &&
@@ -188,8 +198,18 @@ export default function ProgressView() {
     currentWeight !== null && targetValid
       ? Math.max(1, Math.ceil(Math.abs(currentWeight - targetNumber) / 0.5))
       : null;
+  const measurementPreview = measurementFields.flatMap((field) => {
+    const text = measurementInput[field.key].trim();
+    const value = Number(text.replace(',', '.'));
+    if (!text || !Number.isFinite(value) || value < 10 || value > 250) return [];
+    const previous = [...clientHistory.measurements]
+      .reverse()
+      .find((entry) => entry[field.key] !== undefined)?.[field.key];
+    return [{ label: field.label, value, previous }];
+  });
 
   const navigate = (destination: ProgressPage) => {
+    setSaveConfirmation(null);
     if (destination === 'Objetivo') {
       setGoalInput(clientHistory.goal ?? user?.goal ?? '');
       setTargetInput(clientHistory.targetWeight?.toString() ?? '');
@@ -225,6 +245,12 @@ export default function ProgressView() {
         targetWeight: nextTarget,
       }));
       if (user) setUser({ ...user, goal: goalInput.trim() });
+      setSaveConfirmation({
+        title: 'Objetivo actualizado',
+        message: nextTarget === null
+          ? `Tu meta ahora es: ${goalInput.trim()}.`
+          : `${goalInput.trim()} · peso meta ${formatNumber(nextTarget)} kg.`,
+      });
       setPage('Resumen');
     } catch (error) {
       console.error('Error al guardar el objetivo del cliente:', error);
@@ -248,6 +274,10 @@ export default function ProgressView() {
     setSaving(true);
     try {
       const date = todayKey();
+      const previousWeight = clientHistory.weights.at(-1)?.weight ?? user?.weight ?? null;
+      const weightChange = previousWeight === null ? null : parsedWeight - previousWeight;
+      const comparisonSource =
+        clientHistory.weights.length > 0 ? 'frente al registro anterior' : 'frente al peso de tu perfil';
       await recordClientWeight(clientId, parsedWeight, date);
       setHistory((previous) => ({
         ...previous,
@@ -260,6 +290,12 @@ export default function ProgressView() {
         nextWeightUpdate: addDays(date, 1),
       }));
       if (user) setUser({ ...user, weight: parsedWeight });
+      setSaveConfirmation({
+        title: 'Peso confirmado',
+        message: weightChange === null
+          ? `${formatNumber(parsedWeight)} kg · primer registro guardado.`
+          : `${formatNumber(parsedWeight)} kg · ${weightChange === 0 ? 'sin cambio' : `${weightChange > 0 ? '+' : ''}${formatNumber(weightChange)} kg ${comparisonSource}`}.`,
+      });
       setPage('Resumen');
     } catch (error) {
       const nextDate = error instanceof Error
@@ -302,6 +338,20 @@ export default function ProgressView() {
     setSaving(true);
     try {
       const date = todayKey();
+      const comparison = measurementFields.flatMap((field) => {
+        const value = values[field.key];
+        if (value === undefined) return [];
+        const previous = [...clientHistory.measurements]
+          .reverse()
+          .find((entry) => entry[field.key] !== undefined)?.[field.key];
+        return [
+          `${field.label}: ${formatNumber(value)} cm${
+            previous === undefined
+              ? ' · primer registro'
+              : ` (${value - previous > 0 ? '+' : ''}${formatNumber(value - previous)} cm)`
+          }`,
+        ];
+      });
       await recordClientMeasurements(clientId, values, date);
       setHistory((previous) => ({
         ...previous,
@@ -311,6 +361,10 @@ export default function ProgressView() {
         nextMeasurementsUpdate: addDays(date, 7),
       }));
       setMeasurementInput({ waist: '', hip: '', arms: '', thighs: '' });
+      setSaveConfirmation({
+        title: 'Medidas confirmadas',
+        message: comparison.join(' · '),
+      });
       setPage('Resumen');
     } catch (error) {
       const nextDate = error instanceof Error
@@ -572,9 +626,21 @@ export default function ProgressView() {
               )}
             </View>
             {weightConfirmation ? (
+              <View style={styles.confirmationInsight}>
+                <Ionicons name="analytics-outline" size={18} color={SportGymColors.success} />
+                <ThemedText style={styles.confirmationInsightText}>
+                  {weightPreviewChange === null
+                    ? 'Este será tu primer peso guardado.'
+                    : weightPreviewChange === 0
+                      ? `Igual a ${weightComparisonSource}.`
+                      : `${weightPreviewChange > 0 ? '+' : ''}${formatNumber(weightPreviewChange)} kg desde ${weightComparisonSource}.`}
+                </ThemedText>
+              </View>
+            ) : null}
+            {weightConfirmation ? (
               <View style={styles.actionRow}>
                 <SecondaryButton label="Editar" onPress={() => setWeightConfirmation(false)} />
-                <PrimaryButton label="Confirmar peso" loading={saving} onPress={saveWeight} />
+                <PrimaryButton label="Confirmar y guardar" loading={saving} onPress={saveWeight} />
               </View>
             ) : (
               <PrimaryButton
@@ -616,6 +682,25 @@ export default function ProgressView() {
                   </View>
                 ))}
               </View>
+              {measurementPreview.length > 0 && (
+                <View style={styles.measurementPreview}>
+                  <View style={styles.measurementPreviewHeading}>
+                    <Ionicons name="git-compare-outline" size={17} color={SportGymColors.success} />
+                    <ThemedText style={styles.metricLabel}>Así se comparan tus avances</ThemedText>
+                  </View>
+                  {measurementPreview.map((item) => (
+                    <View key={item.label} style={styles.measurementPreviewRow}>
+                      <ThemedText style={styles.labelSmall}>{item.label}</ThemedText>
+                      <ThemedText style={styles.metricValue}>
+                        {formatNumber(item.value)} cm
+                        {item.previous !== undefined
+                          ? ` (${item.value - item.previous > 0 ? '+' : ''}${formatNumber(item.value - item.previous)})`
+                          : ' · nuevo'}
+                      </ThemedText>
+                    </View>
+                  ))}
+                </View>
+              )}
               <PrimaryButton label="Guardar medidas" loading={saving} disabled={Boolean(clientHistory.nextMeasurementsUpdate)} onPress={saveMeasurements} />
             </Card>
             <Card title="Registro más reciente">
@@ -662,6 +747,25 @@ export default function ProgressView() {
           {clientId ? (
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
               {isLoadingHistory && <Loading />}
+              {saveConfirmation && (
+                <View accessibilityRole="alert" style={styles.saveConfirmation}>
+                  <View style={styles.confirmationIcon}>
+                    <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.flex}>
+                    <ThemedText style={styles.confirmationTitle}>{saveConfirmation.title}</ThemedText>
+                    <ThemedText style={styles.confirmationMessage}>{saveConfirmation.message}</ThemedText>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Cerrar confirmación"
+                    onPress={() => setSaveConfirmation(null)}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close" size={18} color="#A7AEA9" />
+                  </Pressable>
+                </View>
+              )}
               {(['Resumen', 'Gráficas', 'Logros'] as ProgressTab[]).includes(page as ProgressTab) && (
                 <ProgressNavigation
                   page={page as ProgressTab}
@@ -804,13 +908,18 @@ function ProgressMeter({ current, initial, target }: { current: number | null; i
       : current !== null && current === target
         ? 100
         : 0;
+  const remaining = current !== null && target !== null ? Math.abs(current - target) : null;
   return (
     <View style={styles.meterGroup}>
       <View style={styles.meterTrack}>
         <View style={[styles.meterFill, { width: `${percentage}%` }]} />
       </View>
       <ThemedText style={styles.labelSmall}>
-        {target === null ? 'Define un peso meta' : initial === null ? 'Registra tu peso inicial para medir el avance' : `${Math.round(percentage)}% del objetivo`}
+        {target === null
+          ? 'Define un peso meta'
+          : initial === null && current !== target
+            ? 'Registra tu peso inicial para medir el avance'
+            : `${Math.round(percentage)}% del objetivo${remaining === 0 ? ' · meta alcanzada' : remaining !== null ? ` · ${formatNumber(remaining)} kg para la meta` : ''}`}
       </ThemedText>
     </View>
   );
@@ -862,10 +971,25 @@ function BarChart({ values, labels }: { values: number[]; labels: string[] }) {
 
 function WeightChart({ weights }: { weights: ClientProgressHistory['weights'] }) {
   const values = weights.slice(-8);
+  const [plotWidth, setPlotWidth] = useState(0);
   const min = Math.min(...values.map((entry) => entry.weight));
   const max = Math.max(...values.map((entry) => entry.weight));
   const range = Math.max(1, max - min);
   const change = values.at(-1)!.weight - values[0].weight;
+  const changeLabel = values.length < 2
+    ? '1 registro'
+    : change === 0
+      ? 'Sin cambio'
+      : `${change > 0 ? '+' : ''}${formatNumber(change)} kg`;
+  const plotHeight = 124;
+  const points = values.map((entry, index) => {
+    const ratio = values.length > 1 ? index / (values.length - 1) : 0.5;
+    const normalizedWeight = max === min ? 0.5 : (entry.weight - min) / range;
+    return {
+      x: 10 + ratio * Math.max(0, plotWidth - 20),
+      y: 8 + (1 - normalizedWeight) * (plotHeight - 16),
+    };
+  });
   return (
     <View>
       <View style={styles.weightSummary}>
@@ -875,37 +999,70 @@ function WeightChart({ weights }: { weights: ClientProgressHistory['weights'] })
         </View>
         <View style={styles.weightChange}>
           <Ionicons
-            name={change === 0 ? 'remove-outline' : change < 0 ? 'arrow-down-outline' : 'arrow-up-outline'}
+            name={values.length < 2
+              ? 'ellipse-outline'
+              : change === 0
+                ? 'remove-outline'
+                : change < 0
+                  ? 'arrow-down-outline'
+                  : 'arrow-up-outline'}
             size={15}
             color={SportGymColors.success}
           />
-          <ThemedText style={styles.weightChangeText}>
-            {change === 0 ? 'Sin cambio' : `${change > 0 ? '+' : ''}${formatNumber(change)} kg`}
-          </ThemedText>
+          <ThemedText style={styles.weightChangeText}>{changeLabel}</ThemedText>
         </View>
       </View>
       <View style={styles.chartRange}>
         <ThemedText style={styles.chartRangeLabel}>Rango: {formatNumber(min)}–{formatNumber(max)} kg</ThemedText>
-        <ThemedText style={styles.chartRangeLabel}>Más reciente →</ThemedText>
+        <ThemedText style={styles.chartRangeLabel}>Cada punto = un registro</ThemedText>
       </View>
-      <View style={styles.weightChart}>
-        {values.map((entry, index) => (
-          <View key={`${entry.date}-${index}`} style={styles.weightColumn}>
-            <ThemedText style={styles.barValue}>{formatNumber(entry.weight)}</ThemedText>
-            <View style={styles.weightTrack}>
-              <View
-                style={[
-                  styles.weightBar,
-                  index === values.length - 1 && styles.weightBarLatest,
-                  { height: `${Math.max(16, 25 + ((entry.weight - min) / range) * 75)}%` },
-                ]}
-              />
-            </View>
-            <ThemedText style={styles.weightDate}>{formatDate(entry.date).slice(0, 6)}</ThemedText>
-          </View>
+      <View
+        accessibilityRole="image"
+        accessibilityLabel={`Evolución del peso: de ${formatNumber(values[0].weight)} a ${formatNumber(values.at(-1)!.weight)} kilogramos en ${values.length} registros`}
+        onLayout={(event) => setPlotWidth(event.nativeEvent.layout.width)}
+        style={[styles.weightPlot, { height: plotHeight }]}
+      >
+        {[0, 0.5, 1].map((position) => (
+          <View
+            key={position}
+            style={[styles.weightGridLine, { top: 8 + position * (plotHeight - 16) }]}
+          />
+        ))}
+        {plotWidth > 0 && points.slice(1).map((point, index) => {
+          const previous = points[index];
+          const length = Math.hypot(point.x - previous.x, point.y - previous.y);
+          const angle = Math.atan2(point.y - previous.y, point.x - previous.x);
+          return (
+            <View
+              key={`line-${index}`}
+              style={[
+                styles.weightLine,
+                {
+                  left: (point.x + previous.x - length) / 2,
+                  top: (point.y + previous.y - 2) / 2,
+                  width: length,
+                  transform: [{ rotate: `${angle}rad` }],
+                },
+              ]}
+            />
+          );
+        })}
+        {plotWidth > 0 && points.map((point, index) => (
+          <View
+            key={`${values[index].date}-${index}`}
+            style={[
+              styles.weightPoint,
+              index === points.length - 1 && styles.weightPointLatest,
+              { left: point.x - 5, top: point.y - 5 },
+            ]}
+          />
         ))}
       </View>
-      <ThemedText style={styles.caption}>Cada barra es un registro de peso en kilogramos.</ThemedText>
+      <View style={styles.weightDateAxis}>
+        <ThemedText style={styles.chartRangeLabel}>{formatDate(values[0].date)}</ThemedText>
+        <ThemedText style={styles.chartRangeLabel}>{values.length > 1 ? formatDate(values.at(-1)!.date) : 'Registro más reciente'}</ThemedText>
+      </View>
+      <ThemedText style={styles.caption}>La línea conecta tus registros en orden cronológico.</ThemedText>
     </View>
   );
 }
@@ -1131,12 +1288,12 @@ const styles = StyleSheet.create({
   weightChangeText: { color: '#D6E7D8', fontSize: 10, fontWeight: '800' },
   chartRange: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 7 },
   chartRangeLabel: { color: '#8F9A91', fontSize: 9 },
-  weightChart: { height: 145, flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
-  weightColumn: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'flex-end', gap: 5 },
-  weightTrack: { width: '75%', height: 98, justifyContent: 'flex-end', overflow: 'hidden', borderRadius: 6, backgroundColor: '#27302A' },
-  weightBar: { width: '100%', borderRadius: 6, backgroundColor: '#4C9A3A' },
-  weightBarLatest: { backgroundColor: '#A0D65E' },
-  weightDate: { color: '#A3AAA5', fontSize: 8, textAlign: 'center' },
+  weightPlot: { position: 'relative', overflow: 'hidden', borderRadius: 10, backgroundColor: '#111712' },
+  weightGridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: '#29332B' },
+  weightLine: { position: 'absolute', height: 3, borderRadius: 2, backgroundColor: '#82C83F' },
+  weightPoint: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#4C9A3A', borderWidth: 2, borderColor: '#D6F0A5' },
+  weightPointLatest: { width: 13, height: 13, borderRadius: 7, backgroundColor: '#A0D65E', borderColor: '#F2FFD9' },
+  weightDateAxis: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginTop: 7 },
   trends: { gap: 16 },
   trend: { gap: 7, paddingBottom: 11, borderBottomWidth: 1, borderBottomColor: '#29332B' },
   trendHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 7 },
@@ -1148,6 +1305,15 @@ const styles = StyleSheet.create({
   achievement: { minHeight: 53, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: '#2B302C' },
   achievementSummary: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 11, marginBottom: 4, borderRadius: 12, backgroundColor: '#1C2A20', borderWidth: 1, borderColor: '#304B35' },
   achievementSummaryIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#293E2D' },
+  saveConfirmation: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 14, backgroundColor: '#182B1D', borderWidth: 1, borderColor: '#3C7045' },
+  confirmationIcon: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: SportGymColors.primary },
+  confirmationTitle: { color: '#F1F7EF', fontSize: 13, fontWeight: '800', marginBottom: 3 },
+  confirmationMessage: { color: '#C3D1C5', fontSize: 11, lineHeight: 16 },
+  confirmationInsight: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 11, borderRadius: 10, backgroundColor: '#1B281E', borderWidth: 1, borderColor: '#304B35' },
+  confirmationInsightText: { flex: 1, color: '#D5E5D7', fontSize: 11, lineHeight: 16, fontWeight: '600' },
+  measurementPreview: { gap: 8, padding: 11, borderRadius: 11, backgroundColor: '#1B281E', borderWidth: 1, borderColor: '#304B35' },
+  measurementPreviewHeading: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 2 },
+  measurementPreviewRow: { minHeight: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   achievementIcon: { width: 35, height: 35, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#2B302C' },
   achievementUnlocked: { backgroundColor: '#263A2A' },
   rowTitle: { color: '#F0F2F0', fontSize: 12, fontWeight: '700', marginBottom: 3 },
