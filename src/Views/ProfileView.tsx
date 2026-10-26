@@ -165,6 +165,12 @@ export default function ProfileView() {
     .filter((name) => name?.trim())
     .join(' ');
   const displayName = fullName || user?.username || 'Usuario';
+  const initials = (fullName || user?.username || 'U')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
   const membership = user?.membership;
   const membershipStartDate = parseMembershipDate(membership?.startDate ?? null);
   const membershipEndDate = parseMembershipDate(membership?.endDate ?? null);
@@ -357,23 +363,53 @@ export default function ProfileView() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.profileCard}>
+              <View pointerEvents="none" style={styles.profileGlow} />
+              <View style={styles.profileEyebrow}>
+                <Ionicons name="sparkles-outline" size={14} color="#A0D65E" />
+                <ThemedText style={styles.profileEyebrowText}>TU ESPACIO SPORTGYM</ThemedText>
+              </View>
               <View style={styles.avatarContainer}>
-                <ThemedText style={styles.avatarInitials}>
-                  {displayName.slice(0, 1).toUpperCase()}
-                </ThemedText>
+                <ThemedText style={styles.avatarInitials}>{initials}</ThemedText>
+                <View style={styles.avatarStatus}>
+                  <Ionicons name="barbell-outline" size={11} color="#FFFFFF" />
+                </View>
               </View>
 
               <ThemedText style={styles.profileName}>
                 {displayName}
               </ThemedText>
 
-              <ThemedText style={styles.profileUsername}>
-                @{user?.username || 'usuario'}
-              </ThemedText>
+              <View style={styles.profileIdentity}>
+                <Ionicons name="at-outline" size={14} color="#A5B0A7" />
+                <ThemedText style={styles.profileUsername}>{user?.username || 'usuario'}</ThemedText>
+              </View>
 
               <ThemedText style={styles.profileEmail}>
                 {user?.email || 'Correo no registrado'}
               </ThemedText>
+              <View
+                style={[
+                  styles.membershipBadge,
+                  membershipStatus !== 'Activa' && styles.membershipBadgeInactive,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.membershipStatusDot,
+                    membershipStatus !== 'Activa' && styles.membershipStatusDotInactive,
+                  ]}
+                />
+                <ThemedText
+                  style={[
+                    styles.membershipBadgeText,
+                    membershipStatus !== 'Activa' && styles.membershipBadgeTextInactive,
+                  ]}
+                >
+                  {membershipStatus === 'Sin membresía'
+                    ? 'Sin membresía activa'
+                    : `Membresía ${membershipStatus.toLowerCase()}`}
+                </ThemedText>
+              </View>
             </View>
 
             <View style={styles.menuCard}>
@@ -586,6 +622,7 @@ export default function ProfileView() {
               style={styles.logoutButton}
               onPress={handleLogout}
             >
+              <Ionicons name="log-out-outline" size={18} color="#FFB9B9" />
               <ThemedText style={styles.logoutButtonText}>
                 Cerrar Sesión
               </ThemedText>
@@ -660,15 +697,18 @@ function ProfileMenuItem({
       onPress={onPress}
       style={({ pressed }) => [
         styles.menuItem,
+        expanded && styles.menuItemExpanded,
         pressed && styles.menuItemPressed,
       ]}
     >
-      <Ionicons name={icon} size={19} color="#252525" />
-      <ThemedText style={styles.menuItemLabel}>{label}</ThemedText>
+      <View style={[styles.menuIconWrap, expanded && styles.menuIconWrapExpanded]}>
+        <Ionicons name={icon} size={18} color={SportGymColors.success} />
+      </View>
+      <ThemedText style={[styles.menuItemLabel, expanded && styles.menuItemLabelExpanded]}>{label}</ThemedText>
       <Ionicons
         name={expanded ? 'chevron-down' : 'chevron-forward'}
         size={18}
-        color="#555555"
+        color={expanded ? SportGymColors.success : '#879087'}
       />
     </Pressable>
   );
@@ -871,7 +911,7 @@ const styles = StyleSheet.create({
 
   screen: {
     flex: 1,
-    backgroundColor: '#090A0A',
+    backgroundColor: '#080A08',
   },
 
   safeArea: {
@@ -884,12 +924,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
     marginBottom: 4,
 
-    borderWidth: 2,
-    borderColor: '#4A4A4A',
+    borderWidth: 1,
+    borderColor: '#303B32',
 
     borderRadius: 24,
 
-    backgroundColor: '#0B0C0C',
+    backgroundColor: '#0B0E0B',
 
     overflow: 'hidden',
   },
@@ -907,14 +947,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
 
     paddingHorizontal: 17,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E261F',
   },
 
   backButton: {
     width: 40,
     height: 40,
-
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 13,
+    backgroundColor: '#151A16',
+    borderWidth: 1,
+    borderColor: '#29332B',
   },
 
   headerTitle: {
@@ -941,8 +986,9 @@ const styles = StyleSheet.create({
 
   profileContent: {
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 12,
     paddingBottom: 15,
+    gap: 2,
   },
 
   // ===================================================
@@ -950,82 +996,188 @@ const styles = StyleSheet.create({
   // ===================================================
 
   profileCard: {
-    backgroundColor: '#1B1C1C',
-
-    borderRadius: 15,
-
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#14291A',
+    borderRadius: 20,
     paddingHorizontal: 20,
-    paddingVertical: 25,
+    paddingVertical: 22,
 
     marginBottom: 13,
 
     alignItems: 'center',
 
     borderWidth: 1,
-    borderColor: '#202121',
+    borderColor: '#355C3B',
+  },
+
+  profileGlow: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    top: -112,
+    right: -54,
+    borderRadius: 95,
+    backgroundColor: '#285C37',
+    opacity: 0.45,
+  },
+
+  profileEyebrow: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 17,
+  },
+
+  profileEyebrowText: {
+    color: '#A9C9A9',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
 
   avatarContainer: {
-    width: 100,
-    height: 100,
+    position: 'relative',
+    width: 88,
+    height: 88,
 
-    borderRadius: 50,
+    borderRadius: 44,
 
-    backgroundColor: '#151616',
+    backgroundColor: '#1C3A25',
     borderWidth: 2,
-    borderColor: SportGymColors.primary,
+    borderColor: '#82C83F',
 
     alignItems: 'center',
     justifyContent: 'center',
 
-    marginBottom: 15,
+    marginBottom: 13,
   },
 
   avatarInitials: {
-    color: SportGymColors.primary,
-    fontSize: 38,
-    fontWeight: '800',
+    color: '#D7F5B4',
+    fontSize: 32,
+    fontWeight: '900',
+  },
+
+  avatarStatus: {
+    position: 'absolute',
+    right: 0,
+    bottom: 1,
+    width: 23,
+    height: 23,
+    borderRadius: 12,
+    backgroundColor: SportGymColors.primary,
+    borderWidth: 2,
+    borderColor: '#14291A',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   profileName: {
     color: '#F2F2F2',
 
-    fontSize: 22,
+    fontSize: 23,
 
     fontWeight: '800',
 
+    marginBottom: 6,
+  },
+
+  profileIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
     marginBottom: 5,
   },
 
   profileUsername: {
-    color: SportGymColors.primary,
+    color: '#B9D8B9',
     fontSize: 14,
     fontWeight: '700',
-    marginBottom: 6,
   },
 
   profileEmail: {
-    color: '#AFAFAF',
-
-    fontSize: 14,
+    color: '#AEB9B0',
+    fontSize: 12,
 
     fontWeight: '500',
 
-    marginBottom: 0,
+    marginBottom: 14,
+  },
+
+  membershipBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#203B27',
+    borderWidth: 1,
+    borderColor: '#426C3D',
+  },
+
+  membershipBadgeInactive: {
+    backgroundColor: '#252A26',
+    borderColor: '#3C443E',
+  },
+
+  membershipStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#A0D65E',
+  },
+
+  membershipStatusDotInactive: {
+    backgroundColor: '#A3AAA5',
+  },
+
+  membershipBadgeText: {
+    color: '#D4EACB',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  membershipBadgeTextInactive: {
+    color: '#B4BBB6',
   },
 
   menuCard: {
     marginBottom: 13,
-    gap: 8,
+    gap: 9,
   },
 
   menuItem: {
-    minHeight: 46,
+    minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
+    borderRadius: 14,
+    backgroundColor: '#151A16',
+    borderWidth: 1,
+    borderColor: '#29332B',
+    paddingHorizontal: 12,
+  },
+
+  menuItemExpanded: {
+    borderColor: '#426C3D',
+    backgroundColor: '#18231A',
+    borderBottomLeftRadius: 9,
+    borderBottomRightRadius: 9,
+  },
+
+  menuIconWrap: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 11,
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 13,
+    backgroundColor: '#213328',
+  },
+
+  menuIconWrapExpanded: {
+    backgroundColor: '#2B4930',
   },
 
   menuItemPressed: {
@@ -1034,17 +1186,24 @@ const styles = StyleSheet.create({
 
   menuItemLabel: {
     flex: 1,
-    color: '#222222',
+    color: '#E8EEE9',
     fontSize: 14,
     fontWeight: '700',
-    marginLeft: 10,
+    marginLeft: 11,
+  },
+
+  menuItemLabelExpanded: {
+    color: '#F4F8F4',
   },
 
   progressSummary: {
-    backgroundColor: '#1B1C1C',
-    borderRadius: 12,
+    backgroundColor: '#151A16',
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 15,
+    borderWidth: 1,
+    borderColor: '#29332B',
+    marginTop: -5,
   },
 
   exerciseProgressHero: {
@@ -1052,7 +1211,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#343636',
+    borderBottomColor: '#303B32',
   },
 
   exerciseProgressNumber: {
@@ -1063,13 +1222,13 @@ const styles = StyleSheet.create({
   },
 
   exerciseProgressLabel: {
-    color: '#F2F2F2',
+    color: '#F2F7F2',
     fontSize: 14,
     fontWeight: '700',
   },
 
   workoutCount: {
-    color: '#AFAFAF',
+    color: '#AEB9B0',
     fontSize: 12,
     marginTop: 4,
   },
@@ -1093,14 +1252,14 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 9,
     borderRadius: 9,
-    backgroundColor: '#141616',
+    backgroundColor: '#111612',
   },
 
   achievementIcon: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#242626',
+    backgroundColor: '#242C26',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1127,12 +1286,12 @@ const styles = StyleSheet.create({
 
   progressDivider: {
     height: 1,
-    backgroundColor: '#343636',
+    backgroundColor: '#303B32',
     marginVertical: 8,
   },
 
   progressText: {
-    color: '#AFAFAF',
+    color: '#AEB9B0',
     fontSize: 13,
   },
 
@@ -1158,17 +1317,17 @@ const styles = StyleSheet.create({
   // ===================================================
 
   infoCard: {
-    backgroundColor: '#1B1C1C',
+    backgroundColor: '#151A16',
 
     borderRadius: 15,
 
     paddingHorizontal: 17,
     paddingVertical: 18,
 
-    marginBottom: 13,
+    marginBottom: 0,
 
     borderWidth: 1,
-    borderColor: '#202121',
+    borderColor: '#29332B',
   },
 
   editHeader: {
@@ -1202,7 +1361,7 @@ const styles = StyleSheet.create({
   },
 
   inputLabel: {
-    color: '#AFAFAF',
+    color: '#AEB9B0',
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 6,
@@ -1211,9 +1370,9 @@ const styles = StyleSheet.create({
   profileInput: {
     minHeight: 46,
     borderWidth: 1,
-    borderColor: '#414343',
+    borderColor: '#354037',
     borderRadius: 8,
-    backgroundColor: '#111313',
+    backgroundColor: '#101410',
     color: '#F2F2F2',
     fontSize: 14,
     paddingHorizontal: 11,
@@ -1236,7 +1395,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 38,
     borderWidth: 1,
-    borderColor: '#414343',
+    borderColor: '#354037',
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1291,7 +1450,7 @@ const styles = StyleSheet.create({
   infoLabel: {
     flex: 1,
     flexShrink: 1,
-    color: '#AFAFAF',
+    color: '#AEB9B0',
 
     fontSize: 14,
 
@@ -1310,17 +1469,17 @@ const styles = StyleSheet.create({
   },
 
   activeValue: {
-    color: '#59B83C',
+    color: '#A0D65E',
   },
 
   attendanceCard: {
-    backgroundColor: '#1B1C1C',
-    borderRadius: 15,
+    backgroundColor: '#151A16',
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 17,
     marginBottom: 13,
     borderWidth: 1,
-    borderColor: '#202121',
+    borderColor: '#29332B',
   },
 
   attendanceHeader: {
@@ -1338,7 +1497,7 @@ const styles = StyleSheet.create({
   },
 
   attendanceSubtitle: {
-    color: '#AFAFAF',
+    color: '#AEB9B0',
     fontSize: 13,
     fontWeight: '500',
   },
@@ -1356,7 +1515,7 @@ const styles = StyleSheet.create({
 
   weekdayLabel: {
     height: 13,
-    color: '#858585',
+    color: '#8F9A91',
     fontSize: 9,
     lineHeight: 13,
     textAlign: 'center',
@@ -1379,11 +1538,11 @@ const styles = StyleSheet.create({
   },
 
   dayCellEmpty: {
-    backgroundColor: '#4A4D4B',
+    backgroundColor: '#303A32',
   },
 
   dayCellRegistered: {
-    backgroundColor: '#59B83C',
+    backgroundColor: '#82C83F',
   },
 
   calendarLegend: {
@@ -1411,11 +1570,13 @@ const styles = StyleSheet.create({
   // ===================================================
 
   logoutButton: {
-    height: 45,
-
-    borderRadius: 12,
-
-    backgroundColor: '#FF4444',
+    height: 48,
+    flexDirection: 'row',
+    gap: 8,
+    borderRadius: 13,
+    backgroundColor: '#281819',
+    borderWidth: 1,
+    borderColor: '#583031',
 
     alignItems: 'center',
     justifyContent: 'center',
@@ -1424,10 +1585,8 @@ const styles = StyleSheet.create({
   },
 
   logoutButtonText: {
-    color: '#FFFFFF',
-
-    fontSize: 16,
-
+    color: '#FFB9B9',
+    fontSize: 14,
     fontWeight: '700',
   },
 
@@ -1446,10 +1605,10 @@ const styles = StyleSheet.create({
   bottomNavigation: {
     height: 76,
 
-    backgroundColor: '#0C0D0D',
+    backgroundColor: '#0C100D',
 
     borderTopWidth: 1,
-    borderTopColor: '#292A2A',
+    borderTopColor: '#29332B',
 
     flexDirection: 'row',
 
