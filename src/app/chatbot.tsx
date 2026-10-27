@@ -28,7 +28,7 @@ import {
     saveChatConversationMessage,
     saveGeneratedRoutine,
     updateChatConversation,
-    type ChatConversation,
+    type ChatConversation
 } from "../../assets/database/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -38,8 +38,11 @@ import {
 } from "../lib/chatbot-routines";
 import { type ClientProfile } from "../lib/fitness-ai";
 import {
+    formatRecipesForAI,
     getRecipesForNutritionFocus,
+    getRecommendedRecipesForProfile,
     saveFavoriteRecipes,
+    type Recipe,
 } from "../lib/recipes";
 import { askSporti } from "../lib/sporti-groq";
 
@@ -233,6 +236,180 @@ const QuestionOptionButton = memo(
     prev.onSelect === next.onSelect
 );
 
+const RecipeRecommendationCard = memo(({ recipe, onView }: { recipe: Recipe; onView: () => void }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <Pressable
+        onPress={onView}
+        style={({ pressed }) => [styles.recipeCard, pressed && styles.recipeCardPressed]}
+      >
+        <View style={styles.recipeCardHeader}>
+          <Ionicons name="restaurant-outline" size={24} color={GREEN} />
+          <Text style={styles.recipeCardTitle}>Receta Recomendada</Text>
+        </View>
+        <Text style={styles.recipeName}>{recipe.name}</Text>
+        <View style={styles.recipeNutrition}>
+          {recipe.calories && (
+            <Text style={styles.nutritionText}>{recipe.calories} kcal</Text>
+          )}
+          {recipe.protein && (
+            <Text style={styles.nutritionText}>{recipe.protein}g proteína</Text>
+          )}
+          {recipe.preparationMinutes && (
+            <Text style={styles.nutritionText}>{recipe.preparationMinutes} min</Text>
+          )}
+        </View>
+        <View style={styles.recipeCardFooter}>
+          <Text style={styles.recipeCardAction}>Ver receta completa →</Text>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+});
+
+const RoutineRecommendationCard = memo(({ onView }: { onView: () => void }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <Pressable
+        onPress={onView}
+        style={({ pressed }) => [styles.recipeCard, pressed && styles.recipeCardPressed]}
+      >
+        <View style={styles.recipeCardHeader}>
+          <Ionicons name="fitness" size={24} color={GREEN} />
+          <Text style={styles.recipeCardTitle}>Rutina Recomendada</Text>
+        </View>
+        <Text style={styles.recipeName}>Ver tu rutina personalizada</Text>
+        <View style={styles.recipeNutrition}>
+          <Text style={styles.nutritionText}>Ejercicios adaptados a tu objetivo</Text>
+          <Text style={styles.nutritionText}>Series y repeticiones incluidas</Text>
+        </View>
+        <View style={styles.recipeCardFooter}>
+          <Text style={styles.recipeCardAction}>Ver rutina →</Text>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+});
+
+const StoreRecommendationCard = memo(({ onView }: { onView: () => void }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <Pressable
+        onPress={onView}
+        style={({ pressed }) => [styles.recipeCard, pressed && styles.recipeCardPressed]}
+      >
+        <View style={styles.recipeCardHeader}>
+          <Ionicons name="cart-outline" size={24} color={GREEN} />
+          <Text style={styles.recipeCardTitle}>Suplementos Recomendados</Text>
+        </View>
+        <Text style={styles.recipeName}>Explora suplementos básicos</Text>
+        <View style={styles.recipeNutrition}>
+          <Text style={styles.nutritionText}>Proteína, creatina, pre-entreno</Text>
+          <Text style={styles.nutritionText}>Opciones según tu objetivo</Text>
+        </View>
+        <View style={styles.recipeCardFooter}>
+          <Text style={styles.recipeCardAction}>Ver tienda →</Text>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+});
+
+const DrinkRecommendationCard = memo(({ drink, onDismiss }: { drink: string; onDismiss: () => void }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <View style={styles.recipeCard}>
+        <View style={styles.recipeCardHeader}>
+          <Ionicons name="water-outline" size={24} color={GREEN} />
+          <Text style={styles.recipeCardTitle}>Recomendación de Hidratación</Text>
+        </View>
+        <Text style={styles.recipeName}>{drink}</Text>
+        <View style={styles.recipeNutrition}>
+          <Text style={styles.nutritionText}>Importante para tu recuperación</Text>
+          <Text style={styles.nutritionText}>Mantén buena hidratación</Text>
+        </View>
+        <View style={styles.recipeCardFooter}>
+          <Pressable onPress={onDismiss} style={styles.dismissBtn}>
+            <Text style={styles.dismissText}>Entendido</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Animated.View>
+  );
+});
+
 export default function ChatbotScreen() {
   const { user } = useAuth();
   const listRef = useRef<FlatList<Message>>(null);
@@ -270,6 +447,12 @@ export default function ChatbotScreen() {
   const [showSummary, setShowSummary] = useState(false);
   const [isPreparingRecipes, setIsPreparingRecipes] = useState(false);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [recommendedRecipe, setRecommendedRecipe] = useState<Recipe | null>(null);
+  const [recommendedRoutine, setRecommendedRoutine] = useState<string | null>(null);
+  const [recommendedStore, setRecommendedStore] = useState<string | null>(null);
+  const [recommendedDrink, setRecommendedDrink] = useState<string | null>(null);
+  const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
+  const [recentWorkouts, setRecentWorkouts] = useState<any[]>([]);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -346,6 +529,31 @@ export default function ChatbotScreen() {
 
   const dynamicOptions = useMemo(() => OPTIONS, []);
 
+  useEffect(() => {
+    const loadRecipes = async () => {
+      try {
+        const recipes = await getRecommendedRecipesForProfile(profile?.goal);
+        setAllRecipes(recipes);
+      } catch (error) {
+        console.error("Error loading recipes:", error);
+      }
+    };
+    loadRecipes();
+  }, [profile?.goal]);
+
+  useEffect(() => {
+    const loadRecentWorkouts = async () => {
+      if (!user?.clientId) return;
+      try {
+        const progress = await getClientWorkoutProgress(user.clientId);
+        setRecentWorkouts(progress.workouts.slice(0, 3));
+      } catch (error) {
+        console.error("Error loading workouts:", error);
+      }
+    };
+    loadRecentWorkouts();
+  }, [user?.clientId]);
+
   const scrollToEnd = () =>
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
 
@@ -369,6 +577,11 @@ export default function ChatbotScreen() {
     showOptions,
     initialMessage,
     conversations,
+    recentWorkouts,
+    recommendedRecipe,
+    recommendedRoutine,
+    recommendedStore,
+    recommendedDrink,
   });
 
   stateRef.current = {
@@ -384,6 +597,7 @@ export default function ChatbotScreen() {
     showOptions,
     initialMessage,
     conversations,
+    recentWorkouts,
   };
 
   const resetConversationState = () => {
@@ -966,16 +1180,45 @@ export default function ChatbotScreen() {
       edad: s.profile?.age,
       genero: s.profile?.gender,
       restricciones: s.profile?.restrictions,
+      entrenamientosRecientes: recentWorkouts.length > 0 ? recentWorkouts.map(w => ({
+        dia: w.dia,
+        duracion: w.duracionMinutos,
+        fecha: w.fechaInicio,
+      })) : [],
     };
+
+    const recipesContext = formatRecipesForAI(allRecipes);
 
     const response = await askSporti(historial, {
       ...perfil,
       objetivo: s.userGoal ?? perfil.objetivo,
       respuestas: s.userResponses,
-    });
+    }, recipesContext);
+
     const botMessage = { id: `b-${Date.now()}`, from: "bot" as const, text: response };
     setMessages((prev) => [...prev, botMessage]);
     await persistMessage(activeConversationId, botMessage);
+
+    const recommendationMatch = response.match(/\[([^\]]+)\]/);
+    if (recommendationMatch) {
+      const recommendation = recommendationMatch[1];
+
+      const matchedRecipe = allRecipes.find(r =>
+        r.name.toLowerCase().includes(recommendation.toLowerCase()) ||
+        recommendation.toLowerCase().includes(r.name.toLowerCase())
+      );
+
+      if (matchedRecipe) {
+        setRecommendedRecipe(matchedRecipe);
+      } else if (recommendation.toLowerCase().includes("rutina")) {
+        setRecommendedRoutine(recommendation);
+      } else if (recommendation.toLowerCase().includes("suplemento") || recommendation.toLowerCase().includes("tienda")) {
+        setRecommendedStore(recommendation);
+      } else if (recommendation.toLowerCase().includes("bebida")) {
+        setRecommendedDrink(recommendation);
+      }
+    }
+
     setIsLoading(false);
     scrollToEnd();
 
@@ -995,6 +1238,30 @@ export default function ChatbotScreen() {
   const handleSelect = useCallback((title: string) => {
     sendMessage(title);
   }, [sendMessage]);
+
+  const handleViewRecipe = useCallback(() => {
+    if (recommendedRecipe) {
+      router.push({
+        pathname: "/(tabs)/nutrition",
+        params: { recipeId: recommendedRecipe.id }
+      } as never);
+      setRecommendedRecipe(null);
+    }
+  }, [recommendedRecipe]);
+
+  const handleViewRoutine = useCallback(() => {
+    router.navigate("/(tabs)/routine?view=routine" as never);
+    setRecommendedRoutine(null);
+  }, []);
+
+  const handleViewStore = useCallback(() => {
+    router.navigate("/(tabs)/nutrition" as never);
+    setRecommendedStore(null);
+  }, []);
+
+  const handleDismissDrink = useCallback(() => {
+    setRecommendedDrink(null);
+  }, []);
 
   const openRecommendedRecipes = async () => {
     const { user: currentUser, userGoal: currentGoal } = stateRef.current;
@@ -1048,6 +1315,48 @@ export default function ChatbotScreen() {
             />
           </Animated.View>
           <Text style={styles.loadingMessage}>Sporti está pensando...</Text>
+        </View>
+      );
+    }
+
+    if (recommendedRecipe) {
+      return (
+        <View style={styles.recipeCardWrapper}>
+          <RecipeRecommendationCard
+            recipe={recommendedRecipe}
+            onView={handleViewRecipe}
+          />
+        </View>
+      );
+    }
+
+    if (recommendedRoutine) {
+      return (
+        <View style={styles.recipeCardWrapper}>
+          <RoutineRecommendationCard
+            onView={handleViewRoutine}
+          />
+        </View>
+      );
+    }
+
+    if (recommendedStore) {
+      return (
+        <View style={styles.recipeCardWrapper}>
+          <StoreRecommendationCard
+            onView={handleViewStore}
+          />
+        </View>
+      );
+    }
+
+    if (recommendedDrink) {
+      return (
+        <View style={styles.recipeCardWrapper}>
+          <DrinkRecommendationCard
+            drink={recommendedDrink}
+            onDismiss={handleDismissDrink}
+          />
         </View>
       );
     }
@@ -1730,6 +2039,81 @@ const styles = StyleSheet.create({
   loadingText: {
     color: GREEN,
     fontSize: 16,
+    fontWeight: "600",
+  },
+
+  /* Recipe Card */
+  recipeCardWrapper: {
+    paddingHorizontal: 12,
+    marginTop: 8,
+  },
+  recipeCard: {
+    backgroundColor: "#F8F8F8",
+    borderWidth: 1.5,
+    borderColor: GREEN,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  recipeCardPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  recipeCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  recipeCardTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: GREEN,
+    marginLeft: 8,
+  },
+  recipeName: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: TEXT_DARK,
+    marginBottom: 8,
+  },
+  recipeNutrition: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 12,
+  },
+  nutritionText: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+    backgroundColor: "#E8E8E8",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  recipeCardFooter: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  recipeCardAction: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: GREEN,
+  },
+  dismissBtn: {
+    backgroundColor: GREEN,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  dismissText: {
+    color: "#FFFFFF",
+    fontSize: 14,
     fontWeight: "600",
   },
 });

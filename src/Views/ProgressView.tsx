@@ -2,26 +2,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { SportGymColors } from '@/constants/theme';
 import {
-  getClientWorkoutProgress,
-  recordClientMeasurements,
-  recordClientWeight,
-  subscribeClientProgressHistory,
-  updateClientProgressGoal,
-  type ClientMeasurementEntry,
-  type ClientProgressHistory,
+    getClientWorkoutProgress,
+    recordClientMeasurements,
+    recordClientWeight,
+    subscribeClientProgressHistory,
+    updateClientProgressGoal,
+    type ClientMeasurementEntry,
+    type ClientProgressHistory,
 } from '../../assets/database/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAttendance } from '../lib/attendance';
@@ -431,6 +431,19 @@ export default function ProgressView() {
                   </ThemedText>
                 </View>
               </View>
+              {user?.height && (
+                <View style={styles.weightPair}>
+                  <View>
+                    <ThemedText style={styles.labelSmall}>Rango saludable</ThemedText>
+                    <ThemedText style={styles.weightLarge}>
+                      {(() => {
+                        const { minWeight, maxWeight } = calculateHealthyWeightRange(user.height);
+                        return `${formatNumber(minWeight)} - ${formatNumber(maxWeight)} kg`;
+                      })()}
+                    </ThemedText>
+                  </View>
+                </View>
+              )}
             </View>
 
             <View style={styles.stats}>
@@ -524,9 +537,17 @@ export default function ProgressView() {
               })}
             </Card>
             <Card title="Métricas corporales" action="Actualizar" onAction={() => navigate('Medidas')}>
-              {currentWeight && user?.height
-                ? <Metric label="IMC aproximado" value={formatNumber(currentWeight / ((user.height / 100) ** 2))} detail="Índice basado en peso y estatura" />
-                : <ThemedText style={styles.bodyText}>Completa peso y estatura en tu perfil para consultar el IMC.</ThemedText>}
+              {currentWeight && user?.height ? (() => {
+                const bmiAnalysis = getCompleteBMIAnalysis(currentWeight, user.height, user?.age, user?.goal);
+                const { minWeight, maxWeight } = calculateHealthyWeightRange(user.height);
+                return (
+                  <>
+                    <Metric label="IMC actual" value={formatNumber(bmiAnalysis.currentBMI ?? 0)} detail={bmiAnalysis.category} />
+                    <Metric label="Rango saludable" value={`${formatNumber(minWeight)} - ${formatNumber(maxWeight)} kg`} detail="Según tu estatura" />
+                    <ThemedText style={styles.caption}>{bmiAnalysis.recommendation}</ThemedText>
+                  </>
+                );
+              })() : <ThemedText style={styles.bodyText}>Completa peso y estatura en tu perfil para consultar el IMC y rango de peso saludable.</ThemedText>}
               <Metric label="Asistencias" value={String(attendance.total)} detail="Días registrados" />
               <Metric label="Racha actual" value={`${attendance.currentStreak} días`} detail="Días consecutivos" />
             </Card>
@@ -603,6 +624,19 @@ export default function ProgressView() {
             <ThemedText style={styles.bodyText}>Se permite un registro por día. Tus actualizaciones anteriores se conservan en el historial.</ThemedText>
             {clientHistory.nextWeightUpdate && (
               <Notice text={`Podrás registrar peso nuevamente el ${formatDate(clientHistory.nextWeightUpdate)}.`} />
+            )}
+            {user?.height && (
+              (() => {
+                const { minWeight, maxWeight } = calculateHealthyWeightRange(user.height);
+                return (
+                  <View style={styles.confirmationInsight}>
+                    <Ionicons name="fitness-outline" size={18} color={SportGymColors.success} />
+                    <ThemedText style={styles.confirmationInsightText}>
+                      Rango saludable para tu estatura: {formatNumber(minWeight)} - {formatNumber(maxWeight)} kg
+                    </ThemedText>
+                  </View>
+                );
+              })()
             )}
             <View style={styles.weightInputCard}>
               {weightConfirmation ? (

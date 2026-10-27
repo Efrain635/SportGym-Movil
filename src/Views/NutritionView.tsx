@@ -3,13 +3,13 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -18,11 +18,11 @@ import { ThemedText } from "../components/themed-text";
 import { SportGymColors } from "../constants/theme";
 import { useAuth } from "../contexts/AuthContext";
 import {
-  getClientFavoriteRecipes,
-  getRecipes,
-  removeFavoriteRecipe,
-  saveFavoriteRecipe,
-  type Recipe,
+    getClientFavoriteRecipes,
+    getRecipes,
+    removeFavoriteRecipe,
+    saveFavoriteRecipe,
+    type Recipe,
 } from "../lib/recipes";
 
 type MealFilter = "Todos" | "Desayuno" | "Almuerzo" | "Cena";
@@ -81,8 +81,10 @@ const recipeMatchesGoal = (recipe: Recipe, goal: string) =>
 
 export default function NutritionView({
   initialScreen = "catalog",
+  initialRecipeId,
 }: {
   initialScreen?: NutritionScreen;
+  initialRecipeId?: string;
 }) {
   const { user } = useAuth();
   const [screen, setScreen] = useState<NutritionScreen>(initialScreen);
@@ -123,6 +125,16 @@ export default function NutritionView({
       isCurrent = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (initialRecipeId && recipes.length > 0) {
+      const recipe = recipes.find(r => r.id === initialRecipeId);
+      if (recipe) {
+        setSelectedRecipe(recipe);
+        setScreen("detail");
+      }
+    }
+  }, [initialRecipeId, recipes]);
 
   useEffect(() => {
     if (!user?.clientId) return;

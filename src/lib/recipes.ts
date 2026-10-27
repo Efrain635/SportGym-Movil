@@ -1,12 +1,12 @@
 import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  query,
-  serverTimestamp,
-  where,
-  writeBatch,
+    collection,
+    deleteDoc,
+    doc,
+    getDocs,
+    query,
+    serverTimestamp,
+    where,
+    writeBatch,
 } from "firebase/firestore";
 
 import { db } from "../../assets/database/firebase";
@@ -351,4 +351,68 @@ export async function removeFavoriteRecipe(
   recipeId: string,
 ) {
   await deleteDoc(doc(db, "favoritos_recetas", `${clientId}_${recipeId}`));
+}
+
+export async function getRecommendedRecipesForProfile(
+  goal?: string,
+  maxResults = 3,
+): Promise<Recipe[]> {
+  if (!goal) {
+    return (await getRecipes()).slice(0, maxResults);
+  }
+  return getRecipesForNutritionFocus(goal, maxResults);
+}
+
+export function calculateCalorieNeeds(
+  weight: number,
+  height: number,
+  age: number,
+  gender: string,
+  goal: string,
+): number {
+  const weightKg = weight;
+  const heightCm = height;
+  const ageYears = age;
+  
+  let bmr: number;
+  if (gender.toLowerCase() === "mujer" || gender.toLowerCase() === "female") {
+    bmr = 655 + (9.6 * weightKg) + (1.8 * heightCm) - (4.7 * ageYears);
+  } else {
+    bmr = 66 + (13.7 * weightKg) + (5 * heightCm) - (6.8 * ageYears);
+  }
+  
+  const tdee = bmr * 1.55;
+  
+  switch (goal.toLowerCase()) {
+    case "ganar masa muscular":
+    case "ganancia muscular":
+      return Math.round(tdee * 1.15);
+    case "perder grasa":
+    case "perdida de peso":
+    case "definición":
+      return Math.round(tdee * 0.85);
+    case "mantenerme en forma":
+    case "mantenimiento":
+    default:
+      return Math.round(tdee);
+  }
+}
+
+export function formatRecipesForAI(recipes: Recipe[]): string {
+  if (recipes.length === 0) return "No hay recetas disponibles en la base de datos.";
+  
+  return recipes.map((recipe, index) => {
+    const nutrition = [
+      recipe.calories ? `${recipe.calories} kcal` : null,
+      recipe.protein ? `${recipe.protein}g proteína` : null,
+      recipe.carbohydrates ? `${recipe.carbohydrates}g carbohidratos` : null,
+      recipe.fats ? `${recipe.fats}g grasas` : null,
+    ].filter(Boolean).join(", ");
+    
+    return `${index + 1}. ${recipe.name}
+   - Tipo: ${recipe.meal || recipe.category}
+   - Calorías: ${nutrition}
+   - Tiempo: ${recipe.preparationMinutes ? `${recipe.preparationMinutes} min` : "N/A"}
+   - Objetivos: ${recipe.objectives.join(", ")}`;
+  }).join("\n\n");
 }
