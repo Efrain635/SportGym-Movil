@@ -32,8 +32,8 @@ service cloud.firestore {
     }
 
     match /clientes/{clientId} {
-      allow update: if ownsClient(clientId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      function attendanceOnlyUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "asistencias",
           "rachaAsistencia",
           "mejorRachaAsistencia",
@@ -46,6 +46,144 @@ service cloud.firestore {
         && request.resource.data.mejorRachaAsistencia >= 0
         && request.resource.data.totalAsistencias is int
         && request.resource.data.totalAsistencias >= 0;
+      }
+
+      function validWeightProgressUpdate() {
+        let changedFields = request.resource.data.diff(resource.data).affectedKeys();
+        let progress = request.resource.data.get("progreso", {});
+        let previousProgress = resource.data.get("progreso", {});
+        let weights = progress.get("pesos", []);
+        let latestWeight = weights[weights.size() - 1];
+        return changedFields.hasAll(["progreso", "fechaUltimoCambio"])
+          && changedFields.hasOnly(["progreso", "peso", "fechaUltimoCambio"])
+          && progress is map
+          && progress.keys().hasAll(["pesos", "fechaActualizacion"])
+          && progress.diff(previousProgress).affectedKeys()
+            .hasOnly(["pesos", "fechaActualizacion"])
+          && weights is list
+          && weights.size() > 0
+          && latestWeight is map
+          && latestWeight.keys().hasAll(["peso", "fecha"])
+          && latestWeight.peso == request.resource.data.peso
+          && latestWeight.fecha is string
+          && latestWeight.fecha.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+          && request.resource.data.peso is number
+          && request.resource.data.peso >= 20
+          && request.resource.data.peso <= 400
+          && request.resource.data.fechaUltimoCambio is timestamp
+          && progress.fechaActualizacion is timestamp;
+      }
+
+      function validProgressGoalUpdate() {
+        let changedFields = request.resource.data.diff(resource.data).affectedKeys();
+        let progress = request.resource.data.get("progreso", {});
+        let previousProgress = resource.data.get("progreso", {});
+        return changedFields.hasAll(["progreso", "fechaUltimoCambio"])
+          && changedFields.hasOnly([
+            "progreso",
+            "objetivo",
+            "pesoObjetivo",
+            "fechaUltimoCambio"
+          ])
+          && progress is map
+          && progress.keys().hasAll([
+            "objetivo",
+            "pesoObjetivo",
+            "fechaActualizacion"
+          ])
+          && progress.diff(previousProgress).affectedKeys()
+            .hasOnly(["objetivo", "pesoObjetivo", "fechaActualizacion"])
+          && request.resource.data.objetivo is string
+          && request.resource.data.objetivo.size() > 0
+          && request.resource.data.objetivo.size() <= 100
+          && progress.objetivo == request.resource.data.objetivo
+          && (
+            request.resource.data.pesoObjetivo == null
+            || (
+              request.resource.data.pesoObjetivo is number
+              && request.resource.data.pesoObjetivo >= 20
+              && request.resource.data.pesoObjetivo <= 400
+            )
+          )
+          && progress.pesoObjetivo == request.resource.data.pesoObjetivo
+          && request.resource.data.fechaUltimoCambio is timestamp
+          && progress.fechaActualizacion is timestamp;
+      }
+
+      function validMeasurementProgressUpdate() {
+        let changedFields = request.resource.data.diff(resource.data).affectedKeys();
+        let progress = request.resource.data.get("progreso", {});
+        let previousProgress = resource.data.get("progreso", {});
+        let measurements = progress.get("medidas", []);
+        let latestMeasurement = measurements[measurements.size() - 1];
+        return changedFields.hasAll(["progreso", "fechaUltimoCambio"])
+          && changedFields.hasOnly(["progreso", "fechaUltimoCambio"])
+          && progress is map
+          && progress.keys().hasAll(["medidas", "fechaActualizacion"])
+          && progress.diff(previousProgress).affectedKeys()
+            .hasOnly(["medidas", "fechaActualizacion"])
+          && measurements is list
+          && measurements.size() > 0
+          && latestMeasurement is map
+          && latestMeasurement.keys().hasOnly([
+            "fecha",
+            "cintura",
+            "cadera",
+            "brazos",
+            "muslos"
+          ])
+          && latestMeasurement.keys().hasAll(["fecha"])
+          && latestMeasurement.keys().hasAny([
+            "cintura",
+            "cadera",
+            "brazos",
+            "muslos"
+          ])
+          && latestMeasurement.fecha is string
+          && latestMeasurement.fecha.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+          && (
+            !latestMeasurement.keys().hasAny(["cintura"])
+            || (
+              latestMeasurement.cintura is number
+              && latestMeasurement.cintura >= 10
+              && latestMeasurement.cintura <= 250
+            )
+          )
+          && (
+            !latestMeasurement.keys().hasAny(["cadera"])
+            || (
+              latestMeasurement.cadera is number
+              && latestMeasurement.cadera >= 10
+              && latestMeasurement.cadera <= 250
+            )
+          )
+          && (
+            !latestMeasurement.keys().hasAny(["brazos"])
+            || (
+              latestMeasurement.brazos is number
+              && latestMeasurement.brazos >= 10
+              && latestMeasurement.brazos <= 250
+            )
+          )
+          && (
+            !latestMeasurement.keys().hasAny(["muslos"])
+            || (
+              latestMeasurement.muslos is number
+              && latestMeasurement.muslos >= 10
+              && latestMeasurement.muslos <= 250
+            )
+          )
+          && request.resource.data.fechaUltimoCambio is timestamp
+          && progress.fechaActualizacion is timestamp;
+      }
+
+      allow update: if ownsClient(clientId)
+        && (
+          attendanceOnlyUpdate()
+          || validWeightProgressUpdate()
+          || validProgressGoalUpdate()
+          || validMeasurementProgressUpdate()
+        );
     }
 
     match /asistencias/{attendanceId} {

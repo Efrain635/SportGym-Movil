@@ -941,7 +941,10 @@ const parseClientProgressHistory = (data: ClientRecord): ClientProgressHistory =
       progressNumber(data, "pesoObjetivo"),
     weights,
     measurements,
-    nextWeightUpdate: getNextProgressDate(weights.at(-1)?.date ?? null, 1),
+    nextWeightUpdate:
+      weights.at(-1)?.date === localProgressDate()
+        ? null
+        : getNextProgressDate(weights.at(-1)?.date ?? null, 1),
     nextMeasurementsUpdate: getNextProgressDate(measurements.at(-1)?.date ?? null, 7),
   };
 };
@@ -1030,15 +1033,35 @@ export async function recordClientWeight(
       .filter((value): value is string => value !== null)
       .sort()
       .at(-1) ?? null;
-    const nextAllowedDate = getNextProgressDate(latestDate, 1);
-    if (nextAllowedDate) {
-      throw new Error(`weight-update-too-soon:${nextAllowedDate}`);
+    if (latestDate !== date) {
+      const nextAllowedDate = getNextProgressDate(latestDate, 1);
+      if (nextAllowedDate) {
+        throw new Error(`weight-update-too-soon:${nextAllowedDate}`);
+      }
     }
+    const todayIndexes = weights.flatMap((value, index) =>
+      progressString(progressRecord(value), "fecha", "date") === date ? [index] : [],
+    );
+    const lastTodayIndex = todayIndexes.at(-1);
+    const nextWeights =
+      lastTodayIndex === undefined
+        ? [...weights, { peso: weight, fecha: date }]
+        : [
+            ...weights.filter(
+              (value, index) =>
+                progressString(progressRecord(value), "fecha", "date") !== date ||
+                index === lastTodayIndex,
+            ),
+          ].map((value) =>
+            progressString(progressRecord(value), "fecha", "date") === date
+              ? { peso: weight, fecha: date }
+              : value,
+          );
 
     transaction.update(clientRef, {
       progreso: {
         ...progress,
-        pesos: [...weights, { peso: weight, fecha: date }],
+        pesos: nextWeights,
         fechaActualizacion: serverTimestamp(),
       },
       peso: weight,

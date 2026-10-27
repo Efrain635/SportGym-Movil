@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -32,6 +33,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAttendance } from '../lib/attendance';
 
 type ProgressTab = 'Resumen' | 'Gráficas' | 'Logros';
+type WeightUnit = 'kg' | 'lb';
 type ProgressPage =
   | 'Resumen'
   | 'Gráficas'
@@ -109,6 +111,21 @@ const formatNumber = (value: number, decimals = 1) =>
     maximumFractionDigits: decimals,
   });
 
+const KG_PER_LB = 0.45359237;
+const weightFromKg = (weightKg: number, unit: WeightUnit) =>
+  unit === 'lb' ? weightKg / KG_PER_LB : weightKg;
+const weightToKg = (weight: number, unit: WeightUnit) =>
+  unit === 'lb' ? weight * KG_PER_LB : weight;
+const formatWeight = (weightKg: number, unit: WeightUnit) =>
+  `${formatNumber(weightFromKg(weightKg, unit))} ${unit}`;
+const convertWeightInput = (value: string, fromUnit: WeightUnit, toUnit: WeightUnit) => {
+  if (!value.trim()) return value;
+  const parsed = Number(value.replace(',', '.'));
+  return Number.isFinite(parsed)
+    ? formatNumber(weightFromKg(weightToKg(parsed, fromUnit), toUnit))
+    : value;
+};
+
 export default function ProgressView() {
   const { user, setUser } = useAuth();
   const clientId = user?.clientId ?? null;
@@ -132,6 +149,9 @@ export default function ProgressView() {
     thighs: '',
   });
   const [saving, setSaving] = useState(false);
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg');
+  const [loadedUnitClientId, setLoadedUnitClientId] = useState<string | null>(null);
+  const weightUnitRef = useRef<WeightUnit>('kg');
 
   useEffect(() => {
     if (!clientId) return;
@@ -143,7 +163,11 @@ export default function ProgressView() {
         if (!active) return;
         setHistory(result);
         setGoalInput(result.goal ?? user?.goal ?? '');
-        setTargetInput(result.targetWeight?.toString() ?? '');
+        setTargetInput(
+          result.targetWeight === null
+            ? ''
+            : formatNumber(weightFromKg(result.targetWeight, weightUnitRef.current)),
+        );
         setHistoryErrorId(null);
         setLoadedHistoryId(clientId);
       },
@@ -175,6 +199,48 @@ export default function ProgressView() {
     };
   }, [clientId, user?.goal]);
 
+  useEffect(() => {
+    let active = true;
+    if (!clientId) return;
+
+    AsyncStorage.getItem(`progress-weight-unit:${clientId}`)
+      .then((savedUnit) => {
+        if (active) {
+          const nextUnit: WeightUnit = savedUnit === 'lb' ? 'lb' : 'kg';
+          const previousUnit = weightUnitRef.current;
+          if (previousUnit !== nextUnit) {
+            setWeightInput((value) => convertWeightInput(value, previousUnit, nextUnit));
+            setTargetInput((value) => convertWeightInput(value, previousUnit, nextUnit));
+          }
+          weightUnitRef.current = nextUnit;
+          setWeightUnit(nextUnit);
+        }
+      })
+      .catch((error) => {
+        console.error('Error al cargar la unidad de peso:', error);
+        if (active) {
+          const previousUnit = weightUnitRef.current;
+          if (previousUnit !== 'kg') {
+            setWeightInput((value) => convertWeightInput(value, previousUnit, 'kg'));
+            setTargetInput((value) => convertWeightInput(value, previousUnit, 'kg'));
+          }
+          weightUnitRef.current = 'kg';
+          setWeightUnit('kg');
+          Alert.alert(
+            'No se pudo cargar la preferencia',
+            'Se usará kg durante esta sesión.',
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoadedUnitClientId(clientId);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [clientId]);
+
   const isLoadingHistory = Boolean(clientId) && loadedHistoryId !== clientId;
   const isLoadingWorkouts = Boolean(clientId) && loadedWorkoutId !== clientId;
   const historyError = Boolean(clientId) && historyErrorId === clientId;
@@ -185,6 +251,8 @@ export default function ProgressView() {
     loadedWorkoutId === clientId && !workoutError ? workouts : blankWorkouts;
   const currentWeight =
     clientHistory.weights.at(-1)?.weight ?? user?.weight ?? null;
+  const latestWeightDate = clientHistory.weights.at(-1)?.date ?? null;
+  const weightUnitReady = Boolean(clientId) && loadedUnitClientId === clientId;
   const adultProfile =
     typeof user?.age === 'number' &&
     user.age >= 18 &&
@@ -203,21 +271,27 @@ export default function ProgressView() {
   const weightComparisonSource =
     clientHistory.weights.length > 0 ? 'tu último registro' : 'el peso guardado en tu perfil';
   const parsedWeightInput = Number(weightInput.replace(',', '.'));
+  const parsedWeightInputKg = Number.isFinite(parsedWeightInput)
+    ? weightToKg(parsedWeightInput, weightUnit)
+    : Number.NaN;
   const weightPreviewChange =
-    previousWeight === null || !Number.isFinite(parsedWeightInput)
+    previousWeight === null || !Number.isFinite(parsedWeightInputKg)
       ? null
-      : parsedWeightInput - previousWeight;
+      : parsedWeightInputKg - previousWeight;
   const targetNumber = Number(targetInput.replace(',', '.'));
+  const targetWeightKg = Number.isFinite(targetNumber)
+    ? weightToKg(targetNumber, weightUnit)
+    : Number.NaN;
   const targetValid =
     targetInput.trim() !== '' &&
-    Number.isFinite(targetNumber) &&
+    Number.isFinite(targetWeightKg) &&
     (healthyWeightRange
-      ? targetNumber >= healthyWeightRange.minWeight &&
-        targetNumber <= healthyWeightRange.maxWeight
-      : targetNumber >= 20 && targetNumber <= 400);
+      ? targetWeightKg >= healthyWeightRange.minWeight &&
+        targetWeightKg <= healthyWeightRange.maxWeight
+      : targetWeightKg >= 20 && targetWeightKg <= 400);
   const expectedWeeks =
     currentWeight !== null && targetValid
-      ? Math.max(1, Math.ceil(Math.abs(currentWeight - targetNumber) / 0.5))
+      ? Math.max(1, Math.ceil(Math.abs(currentWeight - targetWeightKg) / 0.5))
       : null;
   const projectionWeeks =
     currentWeight !== null && progressTargetWeight !== null
@@ -238,14 +312,40 @@ export default function ProgressView() {
     if (destination === 'Objetivo') {
       setGoalInput(clientHistory.goal ?? user?.goal ?? '');
       setTargetInput(
-        (clientHistory.targetWeight ?? recommendedTargetWeight)?.toString() ?? '',
+        (clientHistory.targetWeight ?? recommendedTargetWeight) === null
+          ? ''
+          : formatNumber(
+              weightFromKg(
+                (clientHistory.targetWeight ?? recommendedTargetWeight)!,
+                weightUnit,
+              ),
+            ),
       );
     }
     if (destination === 'Peso') {
-      setWeightInput(currentWeight?.toString() ?? '');
+      setWeightInput(
+        currentWeight === null
+          ? ''
+          : formatNumber(weightFromKg(currentWeight, weightUnit)),
+      );
       setWeightConfirmation(false);
     }
     setPage(destination);
+  };
+
+  const changeWeightUnit = (nextUnit: WeightUnit) => {
+    if (nextUnit === weightUnit || !clientId || !weightUnitReady) return;
+    setWeightInput(convertWeightInput(weightInput, weightUnit, nextUnit));
+    setTargetInput(convertWeightInput(targetInput, weightUnit, nextUnit));
+    weightUnitRef.current = nextUnit;
+    setWeightUnit(nextUnit);
+    AsyncStorage.setItem(`progress-weight-unit:${clientId}`, nextUnit).catch((error) => {
+      console.error('Error al guardar la unidad de peso:', error);
+      Alert.alert(
+        'No se pudo guardar la preferencia',
+        'La unidad seleccionada se conservará solo durante esta sesión.',
+      );
+    });
   };
 
   const saveGoal = async () => {
@@ -261,15 +361,15 @@ export default function ProgressView() {
       Alert.alert(
         'Peso meta fuera del rango',
         healthyWeightRange
-          ? `Para tu estatura, elige una meta entre ${formatNumber(healthyWeightRange.minWeight)} y ${formatNumber(healthyWeightRange.maxWeight)} kg.`
-          : 'Ingresa una meta entre 20 y 400 kg.',
+          ? `Para tu estatura, elige una meta entre ${formatWeight(healthyWeightRange.minWeight, weightUnit)} y ${formatWeight(healthyWeightRange.maxWeight, weightUnit)}.`
+          : `Ingresa una meta entre ${formatWeight(20, weightUnit)} y ${formatWeight(400, weightUnit)}.`,
       );
       return;
     }
 
     setSaving(true);
     try {
-      const nextTarget = targetInput.trim() ? targetNumber : null;
+      const nextTarget = targetInput.trim() ? targetWeightKg : null;
       await updateClientProgressGoal(clientId, goalInput.trim(), nextTarget);
       setHistory((previous) => ({
         ...previous,
@@ -281,7 +381,7 @@ export default function ProgressView() {
         title: 'Objetivo actualizado',
         message: nextTarget === null
           ? `Tu meta ahora es: ${goalInput.trim()}.`
-          : `${goalInput.trim()} · peso meta ${formatNumber(nextTarget)} kg.`,
+          : `${goalInput.trim()} · peso meta ${formatWeight(nextTarget, weightUnit)}.`,
       });
       setPage('Resumen');
     } catch (error) {
@@ -298,8 +398,14 @@ export default function ProgressView() {
       return;
     }
     const parsedWeight = Number(weightInput.replace(',', '.'));
-    if (!Number.isFinite(parsedWeight) || parsedWeight < 20 || parsedWeight > 400) {
-      Alert.alert('Peso no válido', 'Ingresa un valor entre 20 y 400 kg.');
+    const parsedWeightKg = Number.isFinite(parsedWeight)
+      ? weightToKg(parsedWeight, weightUnit)
+      : Number.NaN;
+    if (!Number.isFinite(parsedWeightKg) || parsedWeightKg < 20 || parsedWeightKg > 400) {
+      Alert.alert(
+        'Peso no válido',
+        `Ingresa un valor entre ${formatWeight(20, weightUnit)} y ${formatWeight(400, weightUnit)}.`,
+      );
       return;
     }
 
@@ -307,26 +413,25 @@ export default function ProgressView() {
     try {
       const date = todayKey();
       const previousWeight = clientHistory.weights.at(-1)?.weight ?? user?.weight ?? null;
-      const weightChange = previousWeight === null ? null : parsedWeight - previousWeight;
+      const updatingToday = latestWeightDate === date;
+      const weightChange = previousWeight === null ? null : parsedWeightKg - previousWeight;
       const comparisonSource =
         clientHistory.weights.length > 0 ? 'frente al registro anterior' : 'frente al peso de tu perfil';
-      await recordClientWeight(clientId, parsedWeight, date);
+      await recordClientWeight(clientId, parsedWeightKg, date);
       setHistory((previous) => ({
         ...previous,
         weights: [
-          ...previous.weights.filter(
-            (entry) => entry.date !== date || entry.weight !== parsedWeight,
-          ),
-          { weight: parsedWeight, date },
+          ...previous.weights.filter((entry) => entry.date !== date),
+          { weight: parsedWeightKg, date },
         ].sort((first, second) => first.date.localeCompare(second.date)),
-        nextWeightUpdate: addDays(date, 1),
+        nextWeightUpdate: null,
       }));
-      if (user) setUser({ ...user, weight: parsedWeight });
+      if (user) setUser({ ...user, weight: parsedWeightKg });
       setSaveConfirmation({
-        title: 'Peso confirmado',
+        title: updatingToday ? 'Peso actualizado' : 'Peso confirmado',
         message: weightChange === null
-          ? `${formatNumber(parsedWeight)} kg · primer registro guardado.`
-          : `${formatNumber(parsedWeight)} kg · ${weightChange === 0 ? 'sin cambio' : `${weightChange > 0 ? '+' : ''}${formatNumber(weightChange)} kg ${comparisonSource}`}.`,
+          ? `${formatWeight(parsedWeightKg, weightUnit)} · primer registro guardado.`
+          : `${formatWeight(parsedWeightKg, weightUnit)} · ${weightChange === 0 ? 'sin cambio' : `${weightChange > 0 ? '+' : ''}${formatNumber(weightFromKg(weightChange, weightUnit))} ${weightUnit} ${comparisonSource}`}.`,
       });
       setPage('Resumen');
     } catch (error) {
@@ -450,7 +555,7 @@ export default function ProgressView() {
                 <View>
                   <ThemedText style={styles.labelSmall}>Peso actual</ThemedText>
                   <ThemedText style={styles.weightLarge}>
-                    {currentWeight === null ? 'Sin registro' : `${formatNumber(currentWeight)} kg`}
+                    {currentWeight === null ? 'Sin registro' : formatWeight(currentWeight, weightUnit)}
                   </ThemedText>
                 </View>
                 <Ionicons name="arrow-forward" size={22} color={SportGymColors.success} />
@@ -463,16 +568,27 @@ export default function ProgressView() {
                   <ThemedText style={styles.weightLarge}>
                     {progressTargetWeight === null
                       ? 'Por definir'
-                      : `${formatNumber(progressTargetWeight)} kg`}
+                      : formatWeight(progressTargetWeight, weightUnit)}
                   </ThemedText>
                 </View>
               </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => navigate('Peso')}
+                style={styles.updateWeightButton}
+              >
+                <Ionicons name="create-outline" size={17} color="#FFFFFF" />
+                <ThemedText style={styles.updateWeightButtonText}>
+                  {latestWeightDate === todayKey() ? 'Editar peso de hoy' : 'Actualizar peso actual'}
+                </ThemedText>
+                <Ionicons name="chevron-forward" size={16} color="#D9EAD8" />
+              </Pressable>
               {healthyWeightRange && (
                 <View style={styles.weightPair}>
                   <View>
                     <ThemedText style={styles.labelSmall}>Rango de referencia OMS</ThemedText>
                     <ThemedText style={styles.weightLarge}>
-                      {formatNumber(healthyWeightRange.minWeight)} - {formatNumber(healthyWeightRange.maxWeight)} kg
+                      {formatWeight(healthyWeightRange.minWeight, weightUnit)} - {formatWeight(healthyWeightRange.maxWeight, weightUnit)}
                     </ThemedText>
                   </View>
                 </View>
@@ -494,11 +610,11 @@ export default function ProgressView() {
                 return (
                   <>
                     <Metric label="IMC actual" value={formatNumber(bmiAnalysis.currentBMI ?? 0)} detail={bmiAnalysis.category} />
-                    <Metric label="Rango de referencia OMS" value={`${formatNumber(bmiAnalysis.minWeight)} - ${formatNumber(bmiAnalysis.maxWeight)} kg`} detail="Para adultos, según tu estatura" />
+                    <Metric label="Rango de referencia OMS" value={`${formatWeight(bmiAnalysis.minWeight, weightUnit)} - ${formatWeight(bmiAnalysis.maxWeight, weightUnit)}`} detail="Para adultos, según tu estatura" />
                     {clientHistory.targetWeight !== null ? (
-                      <Metric label="Tu meta guardada" value={`${formatNumber(clientHistory.targetWeight)} kg`} detail={clientHistory.goal ?? user?.goal ?? 'Objetivo personalizado'} />
+                      <Metric label="Tu meta guardada" value={formatWeight(clientHistory.targetWeight, weightUnit)} detail={clientHistory.goal ?? user?.goal ?? 'Objetivo personalizado'} />
                     ) : recommendedTargetWeight !== null ? (
-                      <Metric label="Meta sugerida" value={`${formatNumber(recommendedTargetWeight)} kg`} detail="Puedes editarla en Objetivo" />
+                      <Metric label="Meta sugerida" value={formatWeight(recommendedTargetWeight, weightUnit)} detail="Puedes editarla en Objetivo" />
                     ) : null}
                     <ThemedText style={styles.caption}>{bmiAnalysis.recommendation}</ThemedText>
                     <ThemedText style={styles.caption}>El IMC es una referencia general y no sustituye una valoración profesional.</ThemedText>
@@ -526,9 +642,10 @@ export default function ProgressView() {
                 current={currentWeight}
                 initial={clientHistory.weights[0]?.weight ?? null}
                 target={progressTargetWeight}
+                unit={weightUnit}
               />
               <View style={styles.actionRow}>
-                <Action label="Registrar peso" icon="scale-outline" onPress={() => navigate('Peso')} />
+                <Action label={latestWeightDate === todayKey() ? 'Editar peso' : 'Actualizar peso'} icon="scale-outline" onPress={() => navigate('Peso')} />
                 <Action label="Registrar medidas" icon="body-outline" onPress={() => navigate('Medidas')} />
               </View>
             </Card>
@@ -555,7 +672,7 @@ export default function ProgressView() {
             </Card>
             <Card title="Evolución del peso" action="Registrar" onAction={() => navigate('Peso')}>
               {clientHistory.weights.length
-                ? <WeightChart weights={clientHistory.weights} />
+                ? <WeightChart weights={clientHistory.weights} unit={weightUnit} />
                 : <Empty title="Sin registros todavía" text="Registra tu peso para crear la gráfica." icon="scale-outline" action="Registrar peso" onAction={() => navigate('Peso')} />}
             </Card>
             <Card title="Medidas corporales" action="Registrar" onAction={() => navigate('Medidas')}>
@@ -632,18 +749,18 @@ export default function ProgressView() {
             <Field
               label={
                 healthyWeightRange
-                  ? `Peso meta (kg) · rango ${formatNumber(healthyWeightRange.minWeight)}–${formatNumber(healthyWeightRange.maxWeight)}`
-                  : 'Peso meta (kg), puedes editarlo'
+                  ? `Peso meta (${weightUnit}) · rango ${formatNumber(weightFromKg(healthyWeightRange.minWeight, weightUnit))}–${formatNumber(weightFromKg(healthyWeightRange.maxWeight, weightUnit))}`
+                  : `Peso meta (${weightUnit}), puedes editarlo`
               }
             />
             <TextInput
-              accessibilityLabel="Peso meta en kilogramos"
+              accessibilityLabel={`Peso meta en ${weightUnit}`}
               value={targetInput}
               onChangeText={setTargetInput}
               keyboardType="decimal-pad"
               placeholder={
                 healthyWeightRange
-                  ? `${formatNumber(healthyWeightRange.minWeight)}–${formatNumber(healthyWeightRange.maxWeight)}`
+                  ? `${formatNumber(weightFromKg(healthyWeightRange.minWeight, weightUnit))}–${formatNumber(weightFromKg(healthyWeightRange.maxWeight, weightUnit))}`
                   : 'Ej. 65'
               }
               placeholderTextColor="#89908C"
@@ -651,26 +768,26 @@ export default function ProgressView() {
             />
             {healthyWeightRange && (
               <Notice
-                text={`Puedes elegir cualquier meta entre ${formatNumber(healthyWeightRange.minWeight)} y ${formatNumber(healthyWeightRange.maxWeight)} kg, según el rango de referencia OMS para tu estatura.`}
+                text={`Puedes elegir una meta entre ${formatWeight(healthyWeightRange.minWeight, weightUnit)} y ${formatWeight(healthyWeightRange.maxWeight, weightUnit)}, según el rango de referencia OMS para tu estatura.`}
               />
             )}
             {targetInput.trim() && !targetValid && (
               <Notice
                 text={
                   healthyWeightRange
-                    ? `La meta debe estar entre ${formatNumber(healthyWeightRange.minWeight)} y ${formatNumber(healthyWeightRange.maxWeight)} kg.`
-                    : 'Ingresa una meta entre 20 y 400 kg.'
+                    ? `La meta debe estar entre ${formatWeight(healthyWeightRange.minWeight, weightUnit)} y ${formatWeight(healthyWeightRange.maxWeight, weightUnit)}.`
+                    : `Ingresa una meta entre ${formatWeight(20, weightUnit)} y ${formatWeight(400, weightUnit)}.`
                 }
               />
             )}
             {recommendedTargetWeight !== null && clientHistory.targetWeight === null && (
-              <Notice text={`Meta sugerida: ${formatNumber(recommendedTargetWeight)} kg, calculada para acercarte al rango OMS de ${formatNumber(healthyWeightRange!.minWeight)}–${formatNumber(healthyWeightRange!.maxWeight)} kg. Puedes editarla antes de guardar.`} />
+              <Notice text={`Meta sugerida: ${formatWeight(recommendedTargetWeight, weightUnit)}, calculada para acercarte al rango OMS de ${formatWeight(healthyWeightRange!.minWeight, weightUnit)}–${formatWeight(healthyWeightRange!.maxWeight, weightUnit)}. Puedes editarla antes de guardar.`} />
             )}
             {typeof user?.age === 'number' && user.age < 18 && (
               <Notice text="No se sugiere un peso meta con el IMC adulto. Para menores de 18 años se utilizan curvas de crecimiento." />
             )}
             {expectedWeeks !== null && (
-              <Notice text={`Estimación orientativa: ${expectedWeeks} semanas a 0.5 kg por semana. No sustituye asesoría profesional.`} />
+              <Notice text={`Estimación orientativa: ${expectedWeeks} semanas a ${formatWeight(0.5, weightUnit)} por semana. No sustituye asesoría profesional.`} />
             )}
             <PrimaryButton label="Guardar objetivo" loading={saving} onPress={saveGoal} />
           </Card>
@@ -683,12 +800,12 @@ export default function ProgressView() {
               <View style={styles.weightPair}>
                 <View>
                   <ThemedText style={styles.labelSmall}>Actual</ThemedText>
-                  <ThemedText style={styles.weightLarge}>{currentWeight === null ? '—' : `${formatNumber(currentWeight)} kg`}</ThemedText>
+                  <ThemedText style={styles.weightLarge}>{currentWeight === null ? '—' : formatWeight(currentWeight, weightUnit)}</ThemedText>
                 </View>
                 <Ionicons name="arrow-forward" size={22} color={SportGymColors.success} />
                 <View style={styles.alignRight}>
                   <ThemedText style={styles.labelSmall}>Meta</ThemedText>
-                  <ThemedText style={styles.weightLarge}>{progressTargetWeight === null ? '—' : `${formatNumber(progressTargetWeight)} kg`}</ThemedText>
+                  <ThemedText style={styles.weightLarge}>{progressTargetWeight === null ? '—' : formatWeight(progressTargetWeight, weightUnit)}</ThemedText>
                 </View>
               </View>
             </View>
@@ -697,9 +814,9 @@ export default function ProgressView() {
                 <ThemedText style={styles.bodyText}>
                   {clientHistory.targetWeight === null
                     ? 'La proyección usa una meta sugerida a partir de tus datos guardados y el rango OMS para adultos. Guarda o ajusta la meta en Objetivo para personalizarla.'
-                    : 'Referencia visual calculada a 0.5 kg por semana. El resultado real depende de tu entrenamiento y seguimiento.'}
+                    : `Referencia visual calculada a ${formatWeight(0.5, weightUnit)} por semana. El resultado real depende de tu entrenamiento y seguimiento.`}
                 </ThemedText>
-                <ProjectionList current={currentWeight} target={progressTargetWeight} />
+                <ProjectionList current={currentWeight} target={progressTargetWeight} unit={weightUnit} />
                 <Metric label="Tiempo orientativo" value={`${projectionWeeks ?? 1} semanas`} />
                 <Notice text="Consulta con un profesional para establecer metas adecuadas para ti." />
               </Card>
@@ -710,29 +827,33 @@ export default function ProgressView() {
         );
       case 'Peso':
         return (
-          <Card title={weightConfirmation ? 'Confirma tu peso actual' : 'Registra tu peso'}>
-            <ThemedText style={styles.bodyText}>Se permite un registro por día. Tus actualizaciones anteriores se conservan en el historial.</ThemedText>
-            {clientHistory.nextWeightUpdate && (
+          <Card title={weightConfirmation ? 'Confirma tu peso actual' : latestWeightDate === todayKey() ? 'Edita tu peso de hoy' : 'Actualiza tu peso actual'}>
+            <ThemedText style={styles.bodyText}>
+              {latestWeightDate === todayKey()
+                ? 'Puedes corregir el registro de hoy. Se actualizará la misma entrada sin duplicarla.'
+                : 'Puedes registrar tu peso una vez al día. Tus registros anteriores se conservan en el historial.'}
+            </ThemedText>
+            {clientHistory.nextWeightUpdate && latestWeightDate !== todayKey() && (
               <Notice text={`Podrás registrar peso nuevamente el ${formatDate(clientHistory.nextWeightUpdate)}.`} />
             )}
             {healthyWeightRange && (
               <View style={styles.confirmationInsight}>
                 <Ionicons name="fitness-outline" size={18} color={SportGymColors.success} />
                 <ThemedText style={styles.confirmationInsightText}>
-                  Rango de referencia OMS: {formatNumber(healthyWeightRange.minWeight)} - {formatNumber(healthyWeightRange.maxWeight)} kg
+                  Rango de referencia OMS: {formatWeight(healthyWeightRange.minWeight, weightUnit)} - {formatWeight(healthyWeightRange.maxWeight, weightUnit)}
                 </ThemedText>
               </View>
             )}
             <View style={styles.weightInputCard}>
               {weightConfirmation ? (
                 <>
-                  <ThemedText style={styles.inputWeight}>{weightInput} kg</ThemedText>
+                  <ThemedText style={styles.inputWeight}>{weightInput} {weightUnit}</ThemedText>
                   <ThemedText style={styles.labelSmall}>{formatDate(todayKey())}</ThemedText>
                 </>
               ) : (
                 <>
                   <TextInput
-                    accessibilityLabel="Peso actual en kilogramos"
+                    accessibilityLabel={`Peso actual en ${weightUnit}`}
                     value={weightInput}
                     onChangeText={setWeightInput}
                     keyboardType="decimal-pad"
@@ -740,7 +861,7 @@ export default function ProgressView() {
                     placeholderTextColor="#89908C"
                     style={styles.weightInput}
                   />
-                  <ThemedText style={styles.labelSmall}>kilogramos</ThemedText>
+                  <ThemedText style={styles.labelSmall}>{weightUnit === 'kg' ? 'kilogramos' : 'libras'}</ThemedText>
                 </>
               )}
             </View>
@@ -752,23 +873,27 @@ export default function ProgressView() {
                     ? 'Este será tu primer peso guardado.'
                     : weightPreviewChange === 0
                       ? `Igual a ${weightComparisonSource}.`
-                      : `${weightPreviewChange > 0 ? '+' : ''}${formatNumber(weightPreviewChange)} kg desde ${weightComparisonSource}.`}
+                        : `${weightPreviewChange > 0 ? '+' : ''}${formatNumber(weightFromKg(weightPreviewChange, weightUnit))} ${weightUnit} desde ${weightComparisonSource}.`}
                 </ThemedText>
               </View>
             ) : null}
             {weightConfirmation ? (
               <View style={styles.actionRow}>
                 <SecondaryButton label="Editar" onPress={() => setWeightConfirmation(false)} />
-                <PrimaryButton label="Confirmar y guardar" loading={saving} onPress={saveWeight} />
+                <PrimaryButton label={latestWeightDate === todayKey() ? 'Actualizar peso' : 'Confirmar y guardar'} loading={saving} onPress={saveWeight} />
               </View>
             ) : (
               <PrimaryButton
                 label="Continuar"
-                disabled={Boolean(clientHistory.nextWeightUpdate)}
+                disabled={Boolean(clientHistory.nextWeightUpdate && latestWeightDate !== todayKey())}
                 onPress={() => {
                   const value = Number(weightInput.replace(',', '.'));
-                  if (!Number.isFinite(value) || value < 20 || value > 400) {
-                    Alert.alert('Peso no válido', 'Ingresa un valor entre 20 y 400 kg.');
+                  const valueKg = Number.isFinite(value) ? weightToKg(value, weightUnit) : Number.NaN;
+                  if (!Number.isFinite(valueKg) || valueKg < 20 || valueKg > 400) {
+                    Alert.alert(
+                      'Peso no válido',
+                      `Ingresa un valor entre ${formatWeight(20, weightUnit)} y ${formatWeight(400, weightUnit)}.`,
+                    );
                     return;
                   }
                   setWeightConfirmation(true);
@@ -839,7 +964,7 @@ export default function ProgressView() {
             </Card>
             <Card title="Registros de peso">
               {clientHistory.weights.length
-                ? [...clientHistory.weights].reverse().map((entry, index) => <HistoryRow key={`${entry.date}-${index}`} icon="scale-outline" title={`${formatNumber(entry.weight)} kg`} date={formatDate(entry.date)} />)
+                ? [...clientHistory.weights].reverse().map((entry, index) => <HistoryRow key={`${entry.date}-${index}`} icon="scale-outline" title={formatWeight(entry.weight, weightUnit)} date={formatDate(entry.date)} />)
                 : <ThemedText style={styles.bodyText}>Aún no hay registros de peso.</ThemedText>}
             </Card>
             <Card title="Registros de medidas">
@@ -860,8 +985,32 @@ export default function ProgressView() {
             <Pressable accessibilityRole="button" accessibilityLabel="Volver" onPress={() => page === 'Resumen' ? router.back() : setPage('Resumen')} style={styles.back}>
               <Ionicons name="arrow-back" size={22} color="#F2F2F2" />
             </Pressable>
-            <ThemedText style={styles.headerTitle}>{pageTitle[page]}</ThemedText>
-            <View style={styles.back} />
+            <ThemedText style={styles.headerTitle}>{page === 'Peso' && latestWeightDate === todayKey() ? 'Actualizar peso' : pageTitle[page]}</ThemedText>
+            <View style={styles.unitToggle} accessibilityLabel="Unidad de peso">
+              {(['kg', 'lb'] as WeightUnit[]).map((unit) => (
+                <Pressable
+                  key={unit}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: weightUnit === unit, disabled: !weightUnitReady }}
+                  disabled={!weightUnitReady}
+                  onPress={() => changeWeightUnit(unit)}
+                  style={[
+                    styles.unitOption,
+                    weightUnit === unit && styles.unitOptionSelected,
+                    !weightUnitReady && styles.unitOptionDisabled,
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.unitOptionText,
+                      weightUnit === unit && styles.unitOptionTextSelected,
+                    ]}
+                  >
+                    {unit}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
           </View>
           {clientId ? (
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -1020,7 +1169,17 @@ function Action({ label, icon, onPress }: { label: string; icon: keyof typeof Io
   );
 }
 
-function ProgressMeter({ current, initial, target }: { current: number | null; initial: number | null; target: number | null }) {
+function ProgressMeter({
+  current,
+  initial,
+  target,
+  unit,
+}: {
+  current: number | null;
+  initial: number | null;
+  target: number | null;
+  unit: WeightUnit;
+}) {
   const percentage =
     current !== null && initial !== null && target !== null && initial !== target
       ? Math.max(0, Math.min(100, (1 - Math.abs(current - target) / Math.abs(initial - target)) * 100))
@@ -1038,7 +1197,7 @@ function ProgressMeter({ current, initial, target }: { current: number | null; i
           ? 'Define un peso meta'
           : initial === null && current !== target
             ? 'Registra tu peso inicial para medir el avance'
-            : `${Math.round(percentage)}% del objetivo${remaining === 0 ? ' · meta alcanzada' : remaining !== null ? ` · ${formatNumber(remaining)} kg para la meta` : ''}`}
+            : `${Math.round(percentage)}% del objetivo${remaining === 0 ? ' · meta alcanzada' : remaining !== null ? ` · ${formatWeight(remaining, unit)} para la meta` : ''}`}
       </ThemedText>
     </View>
   );
@@ -1088,7 +1247,13 @@ function BarChart({ values, labels }: { values: number[]; labels: string[] }) {
   );
 }
 
-function WeightChart({ weights }: { weights: ClientProgressHistory['weights'] }) {
+function WeightChart({
+  weights,
+  unit,
+}: {
+  weights: ClientProgressHistory['weights'];
+  unit: WeightUnit;
+}) {
   const values = weights.slice(-8);
   const [plotWidth, setPlotWidth] = useState(0);
   const min = Math.min(...values.map((entry) => entry.weight));
@@ -1099,7 +1264,7 @@ function WeightChart({ weights }: { weights: ClientProgressHistory['weights'] })
     ? '1 registro'
     : change === 0
       ? 'Sin cambio'
-      : `${change > 0 ? '+' : ''}${formatNumber(change)} kg`;
+      : `${change > 0 ? '+' : ''}${formatNumber(weightFromKg(change, unit))} ${unit}`;
   const plotHeight = 124;
   const points = values.map((entry, index) => {
     const ratio = values.length > 1 ? index / (values.length - 1) : 0.5;
@@ -1113,7 +1278,7 @@ function WeightChart({ weights }: { weights: ClientProgressHistory['weights'] })
     <View>
       <View style={styles.weightSummary}>
         <View>
-          <ThemedText style={styles.chartSummaryValue}>{formatNumber(values.at(-1)!.weight)} kg</ThemedText>
+          <ThemedText style={styles.chartSummaryValue}>{formatWeight(values.at(-1)!.weight, unit)}</ThemedText>
           <ThemedText style={styles.chartSummaryLabel}>último registro · {formatDate(values.at(-1)!.date)}</ThemedText>
         </View>
         <View style={styles.weightChange}>
@@ -1132,12 +1297,12 @@ function WeightChart({ weights }: { weights: ClientProgressHistory['weights'] })
         </View>
       </View>
       <View style={styles.chartRange}>
-        <ThemedText style={styles.chartRangeLabel}>Rango: {formatNumber(min)}–{formatNumber(max)} kg</ThemedText>
+        <ThemedText style={styles.chartRangeLabel}>Rango: {formatWeight(min, unit)}–{formatWeight(max, unit)}</ThemedText>
         <ThemedText style={styles.chartRangeLabel}>Cada punto = un registro</ThemedText>
       </View>
       <View
         accessibilityRole="image"
-        accessibilityLabel={`Evolución del peso: de ${formatNumber(values[0].weight)} a ${formatNumber(values.at(-1)!.weight)} kilogramos en ${values.length} registros`}
+        accessibilityLabel={`Evolución del peso: de ${formatWeight(values[0].weight, unit)} a ${formatWeight(values.at(-1)!.weight, unit)} en ${values.length} registros`}
         onLayout={(event) => setPlotWidth(event.nativeEvent.layout.width)}
         style={[styles.weightPlot, { height: plotHeight }]}
       >
@@ -1232,7 +1397,15 @@ function MeasurementTrends({ entries }: { entries: ClientMeasurementEntry[] }) {
   );
 }
 
-function ProjectionList({ current, target }: { current: number; target: number }) {
+function ProjectionList({
+  current,
+  target,
+  unit,
+}: {
+  current: number;
+  target: number;
+  unit: WeightUnit;
+}) {
   const totalWeeks = Math.max(1, Math.ceil(Math.abs(target - current) / 0.5));
   const count = Math.min(5, totalWeeks + 1);
   return (
@@ -1247,7 +1420,7 @@ function ProjectionList({ current, target }: { current: number; target: number }
             <View style={styles.timelineDot} />
             <View style={styles.flex}>
               <ThemedText style={styles.rowTitle}>{week === 0 ? 'Inicio' : `Semana ${week}`}</ThemedText>
-              <ThemedText style={styles.labelSmall}>Peso de referencia: {formatNumber(estimatedWeight)} kg</ThemedText>
+              <ThemedText style={styles.labelSmall}>Peso de referencia: {formatWeight(estimatedWeight, unit)}</ThemedText>
             </View>
             {index === count - 1 && <Ionicons name="checkmark-circle" size={19} color={SportGymColors.success} />}
           </View>
@@ -1352,7 +1525,13 @@ const styles = StyleSheet.create({
   frame: { flex: 1, marginHorizontal: 5, marginBottom: 4, borderWidth: 1, borderColor: '#303B32', borderRadius: 24, backgroundColor: '#0B0E0B', overflow: 'hidden' },
   header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1E261F' },
   back: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { color: '#F2F2F2', fontSize: 17, fontWeight: '800', textAlign: 'center' },
+  headerTitle: { flex: 1, color: '#F2F2F2', fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  unitToggle: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 10, backgroundColor: '#171D18', borderWidth: 1, borderColor: '#344137' },
+  unitOption: { minWidth: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 7 },
+  unitOptionSelected: { backgroundColor: '#32653D' },
+  unitOptionDisabled: { opacity: 0.55 },
+  unitOptionText: { color: '#A8B2AA', fontSize: 11, fontWeight: '800' },
+  unitOptionTextSelected: { color: '#FFFFFF' },
   content: { paddingHorizontal: 15, paddingTop: 12, paddingBottom: 16, gap: 13 },
   tabs: { flexDirection: 'row', gap: 5, padding: 5, borderRadius: 13, backgroundColor: '#151A16', borderWidth: 1, borderColor: '#29322B' },
   tab: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
@@ -1361,17 +1540,19 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#FFFFFF' },
   sectionHint: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, paddingVertical: 1 },
   sectionHintText: { flex: 1, color: '#AEB9B0', fontSize: 11, lineHeight: 16 },
-  goalCard: { padding: 17, borderRadius: 17, backgroundColor: '#14291A', borderWidth: 1, borderColor: '#355C3B' },
+  goalCard: { padding: 17, borderRadius: 19, backgroundColor: '#14291A', borderWidth: 1, borderColor: '#456C4A' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heroIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: SportGymColors.primary, justifyContent: 'center', alignItems: 'center' },
   flex: { flex: 1 },
   eyebrow: { color: '#A7C9AE', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
   heroTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', marginTop: 3 },
   divider: { height: 1, backgroundColor: '#35513D', marginVertical: 14 },
-  weightPair: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  weightPair: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   labelSmall: { color: '#A7AEA9', fontSize: 11, fontWeight: '500' },
   weightLarge: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginTop: 4 },
   alignRight: { alignItems: 'flex-end' },
+  updateWeightButton: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 15, paddingHorizontal: 12, borderRadius: 11, backgroundColor: '#367447' },
+  updateWeightButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   stats: { flexDirection: 'row', gap: 8 },
   stat: { flex: 1, minHeight: 88, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4, borderRadius: 14, backgroundColor: '#151A16', borderWidth: 1, borderColor: '#29332B' },
   statValue: { color: '#F1F3F1', fontSize: 18, fontWeight: '800' },
