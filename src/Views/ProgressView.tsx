@@ -23,6 +23,11 @@ import {
     type ClientMeasurementEntry,
     type ClientProgressHistory,
 } from '../../assets/database/firebase';
+import {
+  calculateHealthFocusedTargetWeight,
+  calculateHealthyWeightRange,
+  getCompleteBMIAnalysis,
+} from '../lib/bmi-calculator';
 import { useAuth } from '../contexts/AuthContext';
 import { useAttendance } from '../lib/attendance';
 
@@ -180,6 +185,20 @@ export default function ProgressView() {
     loadedWorkoutId === clientId && !workoutError ? workouts : blankWorkouts;
   const currentWeight =
     clientHistory.weights.at(-1)?.weight ?? user?.weight ?? null;
+  const adultProfile =
+    typeof user?.age === 'number' &&
+    user.age >= 18 &&
+    typeof user.height === 'number' &&
+    user.height >= 100 &&
+    user.height <= 250;
+  const healthyWeightRange =
+    adultProfile ? calculateHealthyWeightRange(user.height!) : null;
+  const recommendedTargetWeight =
+    adultProfile && currentWeight !== null
+      ? calculateHealthFocusedTargetWeight(currentWeight, user.height!)
+      : null;
+  const progressTargetWeight =
+    clientHistory.targetWeight ?? recommendedTargetWeight;
   const previousWeight = clientHistory.weights.at(-1)?.weight ?? user?.weight ?? null;
   const weightComparisonSource =
     clientHistory.weights.length > 0 ? 'tu último registro' : 'el peso guardado en tu perfil';
@@ -192,11 +211,17 @@ export default function ProgressView() {
   const targetValid =
     targetInput.trim() !== '' &&
     Number.isFinite(targetNumber) &&
-    targetNumber >= 20 &&
-    targetNumber <= 400;
+    (healthyWeightRange
+      ? targetNumber >= healthyWeightRange.minWeight &&
+        targetNumber <= healthyWeightRange.maxWeight
+      : targetNumber >= 20 && targetNumber <= 400);
   const expectedWeeks =
     currentWeight !== null && targetValid
       ? Math.max(1, Math.ceil(Math.abs(currentWeight - targetNumber) / 0.5))
+      : null;
+  const projectionWeeks =
+    currentWeight !== null && progressTargetWeight !== null
+      ? Math.max(1, Math.ceil(Math.abs(currentWeight - progressTargetWeight) / 0.5))
       : null;
   const measurementPreview = measurementFields.flatMap((field) => {
     const text = measurementInput[field.key].trim();
@@ -212,7 +237,9 @@ export default function ProgressView() {
     setSaveConfirmation(null);
     if (destination === 'Objetivo') {
       setGoalInput(clientHistory.goal ?? user?.goal ?? '');
-      setTargetInput(clientHistory.targetWeight?.toString() ?? '');
+      setTargetInput(
+        (clientHistory.targetWeight ?? recommendedTargetWeight)?.toString() ?? '',
+      );
     }
     if (destination === 'Peso') {
       setWeightInput(currentWeight?.toString() ?? '');
@@ -231,7 +258,12 @@ export default function ProgressView() {
       return;
     }
     if (targetInput.trim() && !targetValid) {
-      Alert.alert('Peso no válido', 'Ingresa una meta entre 20 y 400 kg.');
+      Alert.alert(
+        'Peso meta fuera del rango',
+        healthyWeightRange
+          ? `Para tu estatura, elige una meta entre ${formatNumber(healthyWeightRange.minWeight)} y ${formatNumber(healthyWeightRange.maxWeight)} kg.`
+          : 'Ingresa una meta entre 20 y 400 kg.',
+      );
       return;
     }
 
@@ -423,28 +455,63 @@ export default function ProgressView() {
                 </View>
                 <Ionicons name="arrow-forward" size={22} color={SportGymColors.success} />
                 <View style={styles.alignRight}>
-                  <ThemedText style={styles.labelSmall}>Peso meta</ThemedText>
+                  <ThemedText style={styles.labelSmall}>
+                    {clientHistory.targetWeight === null && recommendedTargetWeight !== null
+                      ? 'Meta sugerida'
+                      : 'Peso meta'}
+                  </ThemedText>
                   <ThemedText style={styles.weightLarge}>
-                    {clientHistory.targetWeight === null
+                    {progressTargetWeight === null
                       ? 'Por definir'
-                      : `${formatNumber(clientHistory.targetWeight)} kg`}
+                      : `${formatNumber(progressTargetWeight)} kg`}
                   </ThemedText>
                 </View>
               </View>
-              {user?.height && (
+              {healthyWeightRange && (
                 <View style={styles.weightPair}>
                   <View>
-                    <ThemedText style={styles.labelSmall}>Rango saludable</ThemedText>
+                    <ThemedText style={styles.labelSmall}>Rango de referencia OMS</ThemedText>
                     <ThemedText style={styles.weightLarge}>
-                      {(() => {
-                        const { minWeight, maxWeight } = calculateHealthyWeightRange(user.height);
-                        return `${formatNumber(minWeight)} - ${formatNumber(maxWeight)} kg`;
-                      })()}
+                      {formatNumber(healthyWeightRange.minWeight)} - {formatNumber(healthyWeightRange.maxWeight)} kg
                     </ThemedText>
                   </View>
                 </View>
               )}
             </View>
+
+            <Card
+              title="IMC y referencia saludable"
+              action="Editar meta"
+              onAction={() => navigate('Objetivo')}
+            >
+              {currentWeight !== null && adultProfile ? (() => {
+                const bmiAnalysis = getCompleteBMIAnalysis(
+                  currentWeight,
+                  user.height,
+                  user.age,
+                  clientHistory.goal ?? user.goal,
+                );
+                return (
+                  <>
+                    <Metric label="IMC actual" value={formatNumber(bmiAnalysis.currentBMI ?? 0)} detail={bmiAnalysis.category} />
+                    <Metric label="Rango de referencia OMS" value={`${formatNumber(bmiAnalysis.minWeight)} - ${formatNumber(bmiAnalysis.maxWeight)} kg`} detail="Para adultos, según tu estatura" />
+                    {clientHistory.targetWeight !== null ? (
+                      <Metric label="Tu meta guardada" value={`${formatNumber(clientHistory.targetWeight)} kg`} detail={clientHistory.goal ?? user?.goal ?? 'Objetivo personalizado'} />
+                    ) : recommendedTargetWeight !== null ? (
+                      <Metric label="Meta sugerida" value={`${formatNumber(recommendedTargetWeight)} kg`} detail="Puedes editarla en Objetivo" />
+                    ) : null}
+                    <ThemedText style={styles.caption}>{bmiAnalysis.recommendation}</ThemedText>
+                    <ThemedText style={styles.caption}>El IMC es una referencia general y no sustituye una valoración profesional.</ThemedText>
+                  </>
+                );
+              })() : (
+                <ThemedText style={styles.bodyText}>
+                  {typeof user?.age === 'number' && user.age < 18
+                    ? 'El IMC adulto de la OMS no se aplica a menores de 18 años. Consulta las curvas de crecimiento con un profesional de salud.'
+                    : 'Completa tu edad adulta, peso y estatura en tu perfil para consultar el IMC y el rango de referencia saludable.'}
+                </ThemedText>
+              )}
+            </Card>
 
             <View style={styles.stats}>
               <Stat icon="barbell-outline" label="Ejercicios" value={isLoadingWorkouts ? '…' : workoutError ? '—' : String(clientWorkouts.totalExercises)} />
@@ -458,7 +525,7 @@ export default function ProgressView() {
               <ProgressMeter
                 current={currentWeight}
                 initial={clientHistory.weights[0]?.weight ?? null}
-                target={clientHistory.targetWeight}
+                target={progressTargetWeight}
               />
               <View style={styles.actionRow}>
                 <Action label="Registrar peso" icon="scale-outline" onPress={() => navigate('Peso')} />
@@ -536,18 +603,7 @@ export default function ProgressView() {
                 );
               })}
             </Card>
-            <Card title="Métricas corporales" action="Actualizar" onAction={() => navigate('Medidas')}>
-              {currentWeight && user?.height ? (() => {
-                const bmiAnalysis = getCompleteBMIAnalysis(currentWeight, user.height, user?.age, user?.goal);
-                const { minWeight, maxWeight } = calculateHealthyWeightRange(user.height);
-                return (
-                  <>
-                    <Metric label="IMC actual" value={formatNumber(bmiAnalysis.currentBMI ?? 0)} detail={bmiAnalysis.category} />
-                    <Metric label="Rango saludable" value={`${formatNumber(minWeight)} - ${formatNumber(maxWeight)} kg`} detail="Según tu estatura" />
-                    <ThemedText style={styles.caption}>{bmiAnalysis.recommendation}</ThemedText>
-                  </>
-                );
-              })() : <ThemedText style={styles.bodyText}>Completa peso y estatura en tu perfil para consultar el IMC y rango de peso saludable.</ThemedText>}
+            <Card title="Asistencia y actividad">
               <Metric label="Asistencias" value={String(attendance.total)} detail="Días registrados" />
               <Metric label="Racha actual" value={`${attendance.currentStreak} días`} detail="Días consecutivos" />
             </Card>
@@ -573,16 +629,46 @@ export default function ProgressView() {
                 </Pressable>
               );
             })}
-            <Field label="Peso meta (kg), opcional" />
+            <Field
+              label={
+                healthyWeightRange
+                  ? `Peso meta (kg) · rango ${formatNumber(healthyWeightRange.minWeight)}–${formatNumber(healthyWeightRange.maxWeight)}`
+                  : 'Peso meta (kg), puedes editarlo'
+              }
+            />
             <TextInput
               accessibilityLabel="Peso meta en kilogramos"
               value={targetInput}
               onChangeText={setTargetInput}
               keyboardType="decimal-pad"
-              placeholder="Ej. 65"
+              placeholder={
+                healthyWeightRange
+                  ? `${formatNumber(healthyWeightRange.minWeight)}–${formatNumber(healthyWeightRange.maxWeight)}`
+                  : 'Ej. 65'
+              }
               placeholderTextColor="#89908C"
               style={styles.input}
             />
+            {healthyWeightRange && (
+              <Notice
+                text={`Puedes elegir cualquier meta entre ${formatNumber(healthyWeightRange.minWeight)} y ${formatNumber(healthyWeightRange.maxWeight)} kg, según el rango de referencia OMS para tu estatura.`}
+              />
+            )}
+            {targetInput.trim() && !targetValid && (
+              <Notice
+                text={
+                  healthyWeightRange
+                    ? `La meta debe estar entre ${formatNumber(healthyWeightRange.minWeight)} y ${formatNumber(healthyWeightRange.maxWeight)} kg.`
+                    : 'Ingresa una meta entre 20 y 400 kg.'
+                }
+              />
+            )}
+            {recommendedTargetWeight !== null && clientHistory.targetWeight === null && (
+              <Notice text={`Meta sugerida: ${formatNumber(recommendedTargetWeight)} kg, calculada para acercarte al rango OMS de ${formatNumber(healthyWeightRange!.minWeight)}–${formatNumber(healthyWeightRange!.maxWeight)} kg. Puedes editarla antes de guardar.`} />
+            )}
+            {typeof user?.age === 'number' && user.age < 18 && (
+              <Notice text="No se sugiere un peso meta con el IMC adulto. Para menores de 18 años se utilizan curvas de crecimiento." />
+            )}
             {expectedWeeks !== null && (
               <Notice text={`Estimación orientativa: ${expectedWeeks} semanas a 0.5 kg por semana. No sustituye asesoría profesional.`} />
             )}
@@ -602,19 +688,23 @@ export default function ProgressView() {
                 <Ionicons name="arrow-forward" size={22} color={SportGymColors.success} />
                 <View style={styles.alignRight}>
                   <ThemedText style={styles.labelSmall}>Meta</ThemedText>
-                  <ThemedText style={styles.weightLarge}>{clientHistory.targetWeight === null ? '—' : `${formatNumber(clientHistory.targetWeight)} kg`}</ThemedText>
+                  <ThemedText style={styles.weightLarge}>{progressTargetWeight === null ? '—' : `${formatNumber(progressTargetWeight)} kg`}</ThemedText>
                 </View>
               </View>
             </View>
-            {currentWeight !== null && clientHistory.targetWeight !== null ? (
+            {currentWeight !== null && progressTargetWeight !== null ? (
               <Card title="Proyección estimada">
-                <ThemedText style={styles.bodyText}>Referencia visual calculada a 0.5 kg por semana. El resultado real depende de tu entrenamiento y seguimiento.</ThemedText>
-                <ProjectionList current={currentWeight} target={clientHistory.targetWeight} />
-                <Metric label="Tiempo orientativo" value={`${expectedWeeks ?? 1} semanas`} />
+                <ThemedText style={styles.bodyText}>
+                  {clientHistory.targetWeight === null
+                    ? 'La proyección usa una meta sugerida a partir de tus datos guardados y el rango OMS para adultos. Guarda o ajusta la meta en Objetivo para personalizarla.'
+                    : 'Referencia visual calculada a 0.5 kg por semana. El resultado real depende de tu entrenamiento y seguimiento.'}
+                </ThemedText>
+                <ProjectionList current={currentWeight} target={progressTargetWeight} />
+                <Metric label="Tiempo orientativo" value={`${projectionWeeks ?? 1} semanas`} />
                 <Notice text="Consulta con un profesional para establecer metas adecuadas para ti." />
               </Card>
             ) : (
-              <Empty title="Define tu peso meta" text="Registra tu peso y un objetivo para ver una proyección." icon="flag-outline" action="Configurar objetivo" onAction={() => navigate('Objetivo')} />
+              <Empty title="Completa tus datos" text="Registra tu peso, edad adulta y estatura para calcular una meta saludable orientativa." icon="flag-outline" action="Configurar objetivo" onAction={() => navigate('Objetivo')} />
             )}
           </>
         );
@@ -625,18 +715,13 @@ export default function ProgressView() {
             {clientHistory.nextWeightUpdate && (
               <Notice text={`Podrás registrar peso nuevamente el ${formatDate(clientHistory.nextWeightUpdate)}.`} />
             )}
-            {user?.height && (
-              (() => {
-                const { minWeight, maxWeight } = calculateHealthyWeightRange(user.height);
-                return (
-                  <View style={styles.confirmationInsight}>
-                    <Ionicons name="fitness-outline" size={18} color={SportGymColors.success} />
-                    <ThemedText style={styles.confirmationInsightText}>
-                      Rango saludable para tu estatura: {formatNumber(minWeight)} - {formatNumber(maxWeight)} kg
-                    </ThemedText>
-                  </View>
-                );
-              })()
+            {healthyWeightRange && (
+              <View style={styles.confirmationInsight}>
+                <Ionicons name="fitness-outline" size={18} color={SportGymColors.success} />
+                <ThemedText style={styles.confirmationInsightText}>
+                  Rango de referencia OMS: {formatNumber(healthyWeightRange.minWeight)} - {formatNumber(healthyWeightRange.maxWeight)} kg
+                </ThemedText>
+              </View>
             )}
             <View style={styles.weightInputCard}>
               {weightConfirmation ? (

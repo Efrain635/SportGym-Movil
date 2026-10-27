@@ -25,10 +25,13 @@ import {
     deleteClientChatConversation,
     getChatConversationMessages,
     getClientChatConversations,
+    getClientWorkoutProgress,
     saveChatConversationMessage,
     saveGeneratedRoutine,
+    subscribeClientProgressHistory,
     updateChatConversation,
-    type ChatConversation
+    type ChatConversation,
+    type ClientProgressHistory
 } from "../../assets/database/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -57,6 +60,8 @@ type Message = {
   from: "bot" | "user";
   text: string;
 };
+
+type RecentWorkout = Awaited<ReturnType<typeof getClientWorkoutProgress>>["recentWorkouts"][number];
 
 type Option = {
   id: string;
@@ -452,7 +457,15 @@ export default function ChatbotScreen() {
   const [recommendedStore, setRecommendedStore] = useState<string | null>(null);
   const [recommendedDrink, setRecommendedDrink] = useState<string | null>(null);
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
-  const [recentWorkouts, setRecentWorkouts] = useState<any[]>([]);
+  const [recentWorkouts, setRecentWorkouts] = useState<RecentWorkout[]>([]);
+  const [clientProgressSnapshot, setClientProgressSnapshot] = useState<{
+    clientId: string;
+    history: ClientProgressHistory;
+  } | null>(null);
+  const clientProgressHistory =
+    clientProgressSnapshot?.clientId === user?.clientId
+      ? clientProgressSnapshot.history
+      : null;
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -546,12 +559,25 @@ export default function ChatbotScreen() {
       if (!user?.clientId) return;
       try {
         const progress = await getClientWorkoutProgress(user.clientId);
-        setRecentWorkouts(progress.workouts.slice(0, 3));
+        setRecentWorkouts(progress.recentWorkouts.slice(0, 3));
       } catch (error) {
         console.error("Error loading workouts:", error);
       }
     };
     loadRecentWorkouts();
+  }, [user?.clientId]);
+
+  useEffect(() => {
+    const clientId = user?.clientId;
+    if (!clientId) return;
+
+    return subscribeClientProgressHistory(
+      clientId,
+      (history) => setClientProgressSnapshot({ clientId, history }),
+      (error) => {
+        console.error("Error loading client progress:", error);
+      },
+    );
   }, [user?.clientId]);
 
   const scrollToEnd = () =>
@@ -578,6 +604,7 @@ export default function ChatbotScreen() {
     initialMessage,
     conversations,
     recentWorkouts,
+    clientProgressHistory,
     recommendedRecipe,
     recommendedRoutine,
     recommendedStore,
@@ -598,6 +625,11 @@ export default function ChatbotScreen() {
     initialMessage,
     conversations,
     recentWorkouts,
+    clientProgressHistory,
+    recommendedRecipe,
+    recommendedRoutine,
+    recommendedStore,
+    recommendedDrink,
   };
 
   const resetConversationState = () => {
@@ -1171,19 +1203,20 @@ export default function ChatbotScreen() {
     });
 
     const perfil = {
-      objetivo: s.profile?.goal,
       nivel: s.profile?.level,
       dias: s.profile?.daysPerWeek,
       maquinas: s.profile?.gymMachines,
-      peso: s.profile?.weight,
+      peso: s.clientProgressHistory?.weights.at(-1)?.weight ?? s.profile?.weight,
       altura: s.profile?.height,
       edad: s.profile?.age,
+      pesoObjetivo: s.clientProgressHistory?.targetWeight,
+      objetivo: s.clientProgressHistory?.goal ?? s.profile?.goal,
       genero: s.profile?.gender,
       restricciones: s.profile?.restrictions,
-      entrenamientosRecientes: recentWorkouts.length > 0 ? recentWorkouts.map(w => ({
-        dia: w.dia,
-        duracion: w.duracionMinutos,
-        fecha: w.fechaInicio,
+      entrenamientosRecientes: recentWorkouts.length > 0 ? recentWorkouts.map((workout) => ({
+        dia: workout.date ? new Date(workout.date).toLocaleDateString() : "Fecha desconocida",
+        duracion: workout.durationMinutes,
+        fecha: workout.date,
       })) : [],
     };
 

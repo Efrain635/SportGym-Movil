@@ -24,10 +24,29 @@ export function calculateHealthyWeightRange(height: number): {
   };
 }
 
+export function calculateHealthFocusedTargetWeight(
+  currentWeight: number,
+  height: number,
+): number | null {
+  if (
+    !Number.isFinite(currentWeight) ||
+    currentWeight <= 0 ||
+    !Number.isFinite(height) ||
+    height < 100 ||
+    height > 250
+  ) {
+    return null;
+  }
+
+  const { minWeight, maxWeight } = calculateHealthyWeightRange(height);
+  const targetWeight = Math.min(maxWeight, Math.max(minWeight, currentWeight));
+  return Math.round(targetWeight * 10) / 10;
+}
+
 export function getBMICategory(bmi: number): string {
   if (bmi < 18.5) return "Bajo peso";
-  if (bmi < 24.9) return "Peso saludable";
-  if (bmi < 29.9) return "Sobrepeso";
+  if (bmi < 25) return "Peso saludable";
+  if (bmi < 30) return "Sobrepeso";
   return "Obesidad";
 }
 
@@ -39,15 +58,14 @@ export function getBMIRecommendation(
   goal?: string
 ): string {
   const { minWeight, maxWeight } = calculateHealthyWeightRange(height);
-  const category = getBMICategory(bmi);
 
   let recommendation = "";
 
   if (bmi < 18.5) {
     recommendation = `Tu IMC indica bajo peso. El rango saludable para tu altura (${height} cm) es entre ${minWeight} kg y ${maxWeight} kg. Recomiendo aumentar el consumo de calorías y proteínas de forma gradual, priorizando alimentos densos en nutrientes.`;
-  } else if (bmi < 24.9) {
+  } else if (bmi < 25) {
     recommendation = `¡Excelente! Tu peso está dentro del rango saludable (${minWeight} kg - ${maxWeight} kg). Para mantener este estado, enfócate en mantener una alimentación balanceada y ejercicio regular.`;
-  } else if (bmi < 29.9) {
+  } else if (bmi < 30) {
     recommendation = `Tu IMC indica sobrepeso. El rango saludable para tu altura (${height} cm) es entre ${minWeight} kg y ${maxWeight} kg. Para bajar hacia el rango saludable, necesitas perder aproximadamente ${(currentWeight - maxWeight).toFixed(1)} kg. Combina ejercicio cardiovascular con una dieta controlada en calorías.`;
   } else {
     recommendation = `Tu IMC indica obesidad. El rango saludable para tu altura (${height} cm) es entre ${minWeight} kg y ${maxWeight} kg. Recomiendo consultar con un profesional de la salud para crear un plan seguro y efectivo. El objetivo inicial sería bajar gradualmente hacia el rango saludable.`;
