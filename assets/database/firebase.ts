@@ -771,7 +771,7 @@ export async function getClientWorkoutProgress(clientId: string) {
   weekStart.setHours(0, 0, 0, 0);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 7);
-  const weeklyWorkouts = Array.from({ length: 7 }, () => 0);
+  const weeklyExercises = Array.from({ length: 7 }, () => 0);
   const recentWorkouts = completedWorkouts
     .map((workout) => {
       const data = workout.data();
@@ -786,18 +786,19 @@ export async function getClientWorkoutProgress(clientId: string) {
             ? new Date(rawDate)
             : null;
       const validDate = date && !Number.isNaN(date.getTime()) ? date : null;
+      const exercises = Array.isArray(data.ejercicios)
+        ? data.ejercicios.length
+        : typeof data.totalEjercicios === "number"
+          ? data.totalEjercicios
+          : 0;
       if (validDate && validDate >= weekStart && validDate < weekEnd) {
-        weeklyWorkouts[(validDate.getDay() + 6) % 7] += 1;
+        weeklyExercises[(validDate.getDay() + 6) % 7] += exercises;
       }
 
       return {
         id: workout.id,
         date: validDate?.toISOString() ?? null,
-        exercises: Array.isArray(data.ejercicios)
-          ? data.ejercicios.length
-          : typeof data.totalEjercicios === "number"
-            ? data.totalEjercicios
-            : 0,
+        exercises,
         durationMinutes:
           typeof data.duracionMinutos === "number" ? data.duracionMinutos : null,
         sortDate: validDate?.getTime() ?? 0,
@@ -818,7 +819,7 @@ export async function getClientWorkoutProgress(clientId: string) {
   return {
     totalExercises,
     totalWorkouts: completedWorkouts.length,
-    weeklyWorkouts,
+    weeklyExercises,
     recentWorkouts,
   };
 }

@@ -53,48 +53,57 @@ type AnimatedBottomNavProps = {
   tabs?: HeaderTab[];
   initialIndex?: number;
   onChange?: (index: number, key: string) => void;
+  dark?: boolean;
 };
 
 export function AnimatedBottomNav({
   tabs = DEFAULT_TABS,
   initialIndex = 0,
   onChange,
+  dark = false,
 }: AnimatedBottomNavProps) {
   const pathname = usePathname();
   const routeIndex = tabs.findIndex(
     (tab) => ROUTE_BY_TAB_KEY[tab.key] === pathname,
   );
   const activeIndex = routeIndex === -1 ? initialIndex : routeIndex;
+  const inactiveColor = dark ? "#A6B1AA" : MUTED;
 
   const select = (i: number) => {
     onChange?.(i, tabs[i].key);
   };
 
   return (
-    <View style={styles.bottomNav}>
-      <View style={styles.row}>
+    <View style={[styles.bottomNav, dark && styles.bottomNavDark]}>
+      <View style={[styles.row, dark && styles.rowDark]}>
         {tabs.map((tab, i) => {
           const isActive = i === activeIndex;
 
           return (
             <Pressable
               key={tab.key}
-              style={[styles.tab, isActive && styles.tabActive]}
+              style={[
+                styles.tab,
+                dark && styles.tabDark,
+                isActive && styles.tabActive,
+                isActive && dark && styles.tabActiveDark,
+              ]}
               onPress={() => select(i)}
               hitSlop={4}
             >
               {tab.key === "tienda" ? (
-                <ProteinTubIcon color={isActive ? "#FFFFFF" : MUTED} />
+                <ProteinTubIcon color={isActive ? "#FFFFFF" : inactiveColor} />
               ) : (
                 <Ionicons
                   name={isActive ? tab.icon : tab.iconOutline}
                   size={26}
-                  color={isActive ? "#FFFFFF" : MUTED}
+                  color={isActive ? "#FFFFFF" : inactiveColor}
                 />
               )}
               <ThemedText
                 style={[
                   styles.label,
+                  dark && styles.labelDark,
                   isActive && styles.labelActive,
                 ]}
               >
@@ -133,11 +142,27 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
+  bottomNavDark: {
+    marginHorizontal: 10,
+    marginBottom: 8,
+    paddingHorizontal: 8,
+    paddingTop: 4,
+    paddingBottom: 4,
+    borderWidth: 1,
+    borderColor: "#26312B",
+    borderRadius: 28,
+    backgroundColor: "#101614",
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   row: {
     flexDirection: "row",
     backgroundColor: GREEN_SOFT,
     borderRadius: 22,
     padding: 4,
+  },
+  rowDark: {
+    backgroundColor: "transparent",
   },
   tab: {
     flex: 1,
@@ -146,8 +171,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 18,
   },
+  tabDark: {
+    paddingVertical: 7,
+  },
   tabActive: {
     backgroundColor: GREEN,
+  },
+  tabActiveDark: {
+    backgroundColor: "#16B848",
   },
   label: {
     marginTop: 3,
@@ -157,6 +188,9 @@ const styles = StyleSheet.create({
   },
   labelActive: {
     color: "#FFFFFF",
+  },
+  labelDark: {
+    color: "#A6B1AA",
   },
   proteinIcon: {
     width: 26,

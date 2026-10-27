@@ -12,6 +12,7 @@ import {
     Text,
     TextInput,
     View,
+    useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -153,6 +154,7 @@ type MuscleGroup = {
   primaryMuscles: string[];
   image: string;
   color: string;
+  description: string;
 };
 
 const muscleGroups: MuscleGroup[] = [
@@ -163,6 +165,7 @@ const muscleGroups: MuscleGroup[] = [
     primaryMuscles: [],
     image: "pectoralis-major",
     color: "#F3224B",
+    description: "Desarrolla fuerza y volumen en el pecho.",
   },
   {
     id: "back",
@@ -171,6 +174,7 @@ const muscleGroups: MuscleGroup[] = [
     primaryMuscles: [],
     image: "latissimus-dorsi",
     color: "#168BFF",
+    description: "Mejora tu postura y aumenta tu fuerza.",
   },
   {
     id: "shoulders",
@@ -179,6 +183,7 @@ const muscleGroups: MuscleGroup[] = [
     primaryMuscles: [],
     image: "anterior-deltoid",
     color: "#FF7A00",
+    description: "Logra hombros más fuertes y definidos.",
   },
   {
     id: "biceps",
@@ -187,6 +192,7 @@ const muscleGroups: MuscleGroup[] = [
     primaryMuscles: ["biceps_brachii", "brachialis"],
     image: "biceps-brachii",
     color: "#19C653",
+    description: "Aumenta la fuerza de tus brazos.",
   },
   {
     id: "triceps",
@@ -195,6 +201,7 @@ const muscleGroups: MuscleGroup[] = [
     primaryMuscles: ["triceps_brachii"],
     image: "triceps-brachii",
     color: "#A42BEE",
+    description: "Refuerza y define la parte posterior del brazo.",
   },
   {
     id: "forearms",
@@ -207,6 +214,7 @@ const muscleGroups: MuscleGroup[] = [
     ],
     image: "forearm-flexors",
     color: "#00A7CE",
+    description: "Mejora tu agarre y resistencia.",
   },
   {
     id: "legs",
@@ -215,6 +223,7 @@ const muscleGroups: MuscleGroup[] = [
     primaryMuscles: [],
     image: "quadriceps",
     color: "#F3224B",
+    description: "Desarrolla potencia y estabilidad.",
   },
   {
     id: "glutes",
@@ -223,14 +232,16 @@ const muscleGroups: MuscleGroup[] = [
     primaryMuscles: ["gluteus_maximus", "gluteus_medius"],
     image: "gluteus-maximus",
     color: "#E6A900",
+    description: "Tonifica y fortalece tu tren inferior.",
   },
   {
     id: "core",
-    label: "Abdomen",
+    label: "Core",
     bodyParts: ["core"],
     primaryMuscles: [],
     image: "rectus-abdominis",
     color: "#18C64B",
+    description: "Fortalece tu centro y mejora tu estabilidad.",
   },
   {
     id: "full_body",
@@ -239,6 +250,7 @@ const muscleGroups: MuscleGroup[] = [
     primaryMuscles: [],
     image: "",
     color: "#08A8D0",
+    description: "Entrena todo tu cuerpo en una sesión.",
   },
 ];
 
@@ -397,6 +409,7 @@ function matchesMuscleGroup(exercise: Exercise, group: MuscleGroup) {
 }
 
 export default function ExploreExercisesScreen() {
+  const { width: screenWidth } = useWindowDimensions();
   const [query, setQuery] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("muscle");
   const [selectedMuscle, setSelectedMuscle] = useState("all");
@@ -474,6 +487,7 @@ export default function ExploreExercisesScreen() {
   const selectedMuscleGroup = muscleGroups.find(
     (group) => group.id === selectedMuscle,
   );
+  const groupCardColumns = screenWidth >= 700 ? 3 : 2;
 
   return (
     <View style={styles.screen}>
@@ -489,11 +503,27 @@ export default function ExploreExercisesScreen() {
               <Ionicons name="arrow-back" size={22} color="#F3F4F1" />
             </Pressable>
             <View style={styles.heading}>
-              <Text style={styles.title}>Explorar ejercicios</Text>
-              <Text style={styles.subtitle}>
-                Encuentra tu próximo movimiento
+              <Text style={styles.title}>
+                Explorar <Text style={styles.titleAccent}>ejercicios</Text>
               </Text>
+              <View style={styles.subtitleRow}>
+                <Ionicons name="barbell" size={15} color="#8BEA67" />
+                <Text style={styles.subtitle}>
+                  Encuentra tu próximo movimiento
+                </Text>
+              </View>
             </View>
+            {screenWidth >= 500 && (
+              <View style={styles.motivationCard}>
+                <Ionicons name="flame" size={23} color="#9AF06E" />
+                <View style={styles.motivationCopy}>
+                  <Text style={styles.motivationTitle}>Mantente constante</Text>
+                  <Text style={styles.motivationSubtitle}>
+                    Cada repetición te acerca a tu mejor versión
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           <View style={styles.searchBox}>
@@ -501,7 +531,7 @@ export default function ExploreExercisesScreen() {
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Buscar ejercicio"
+              placeholder="Buscar ejercicio (ej. sentadilla, press...)"
               placeholderTextColor="#858A81"
               style={styles.searchInput}
               returnKeyType="search"
@@ -521,16 +551,19 @@ export default function ExploreExercisesScreen() {
             <View style={styles.filterTabs}>
               <FilterModeButton
                 title="Grupo muscular"
+                icon="body-outline"
                 active={filterMode === "muscle"}
                 onPress={() => setFilterMode("muscle")}
               />
               <FilterModeButton
                 title="Equipo"
+                icon="barbell-outline"
                 active={filterMode === "equipment"}
                 onPress={() => setFilterMode("equipment")}
               />
               <FilterModeButton
                 title="Enfoque"
+                icon="locate-outline"
                 active={filterMode === "focus"}
                 onPress={() => setFilterMode("focus")}
               />
@@ -630,16 +663,27 @@ export default function ExploreExercisesScreen() {
             >
               <View style={styles.resultsHeader}>
                 <View>
-                  <Text style={styles.resultsTitle}>Explora por grupo</Text>
+                  <View style={styles.groupBrowseTitleRow}>
+                    <Ionicons
+                      name="body-outline"
+                      size={22}
+                      color="#54DA4F"
+                    />
+                    <Text style={styles.resultsTitle}>
+                      Explora por grupo muscular
+                    </Text>
+                  </View>
                   <Text style={styles.groupBrowseSubtitle}>
-                    Elige un músculo para ver sus ejercicios
+                    Elige un músculo y enfoca mejor tu entrenamiento.
                   </Text>
                 </View>
-                <Text style={styles.resultsCount}>
-                  {muscleGroups.length} grupos
-                </Text>
               </View>
-              <View style={styles.muscleGroupGrid}>
+              <View
+                style={[
+                  styles.muscleGroupGrid,
+                  groupCardColumns === 3 && styles.muscleGroupGridWide,
+                ]}
+              >
                 {muscleGroups.map((group) => {
                   const image = getFilterImageSource(
                     group.image,
@@ -657,14 +701,22 @@ export default function ExploreExercisesScreen() {
                       key={group.id}
                       style={({ pressed }) => [
                         styles.muscleGroupCard,
-                        { borderColor: group.color },
+                        {
+                          borderColor: group.color,
+                          width: groupCardColumns === 3 ? "31.6%" : "48.5%",
+                        },
                         pressed && styles.cardPressed,
                       ]}
                       onPress={() => setSelectedMuscle(group.id)}
                       accessibilityRole="button"
                       accessibilityLabel={`${group.label}, ${count} ejercicios`}
                     >
-                      <View style={styles.muscleGroupImageFrame}>
+                      <View
+                        style={[
+                          styles.muscleGroupImageFrame,
+                          { backgroundColor: `${group.color}12` },
+                        ]}
+                      >
                         {image ? (
                           <Image
                             source={image}
@@ -675,23 +727,48 @@ export default function ExploreExercisesScreen() {
                         ) : (
                           <Ionicons
                             name="body-outline"
-                            size={52}
+                            size={66}
                             color={group.color}
                           />
                         )}
                       </View>
-                      <Text
+                      <View style={styles.muscleGroupCopy}>
+                        <Text
+                          style={styles.muscleGroupName}
+                          numberOfLines={1}
+                        >
+                          {group.label}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.muscleGroupCount,
+                            { color: group.color },
+                          ]}
+                        >
+                          {count} ejercicios
+                        </Text>
+                        <Text
+                          style={styles.muscleGroupDescription}
+                          numberOfLines={2}
+                        >
+                          {group.description}
+                        </Text>
+                      </View>
+                      <View
                         style={[
-                          styles.muscleGroupName,
-                          { borderColor: group.color },
+                          styles.muscleGroupArrow,
+                          {
+                            borderColor: group.color,
+                            backgroundColor: `${group.color}24`,
+                          },
                         ]}
-                        numberOfLines={1}
                       >
-                        {group.label}
-                      </Text>
-                      <Text style={styles.muscleGroupCount}>
-                        {count} ejercicios
-                      </Text>
+                        <Ionicons
+                          name="chevron-forward"
+                          size={17}
+                          color="#FFFFFF"
+                        />
+                      </View>
                     </Pressable>
                   );
                 })}
@@ -783,6 +860,7 @@ export default function ExploreExercisesScreen() {
           <AnimatedBottomNav
             initialIndex={bottomNavIndex}
             onChange={handleBottomNavChange}
+            dark
           />
         </View>
       </SafeAreaView>
@@ -797,11 +875,17 @@ export default function ExploreExercisesScreen() {
 
 type FilterModeButtonProps = {
   title: string;
+  icon: keyof typeof Ionicons.glyphMap;
   active: boolean;
   onPress: () => void;
 };
 
-function FilterModeButton({ title, active, onPress }: FilterModeButtonProps) {
+function FilterModeButton({
+  title,
+  icon,
+  active,
+  onPress,
+}: FilterModeButtonProps) {
   return (
     <Pressable
       style={[styles.filterModeButton, active && styles.filterModeButtonActive]}
@@ -809,6 +893,11 @@ function FilterModeButton({ title, active, onPress }: FilterModeButtonProps) {
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
     >
+      <Ionicons
+        name={icon}
+        size={16}
+        color={active ? "#152012" : "#B9BDB8"}
+      />
       <Text
         style={[styles.filterModeText, active && styles.filterModeTextActive]}
       >
@@ -1093,83 +1182,131 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   header: {
-    minHeight: 69,
+    minHeight: 94,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#0B110D",
   },
   headerIconButton: {
-    width: 37,
-    height: 40,
+    width: 33,
+    height: 44,
     alignItems: "flex-start",
     justifyContent: "center",
   },
   heading: {
     flex: 1,
-    marginHorizontal: 7,
+    minWidth: 0,
+    marginHorizontal: 5,
   },
   title: {
     color: "#F2F3F0",
-    fontSize: 19,
-    fontWeight: "800",
+    fontSize: 25,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+  },
+  titleAccent: {
+    color: "#4ED957",
+  },
+  subtitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 4,
   },
   subtitle: {
-    color: "#9FA39D",
-    fontSize: 11,
+    color: "#B0B8B3",
+    fontSize: 12,
+  },
+  motivationCard: {
+    width: 160,
+    minHeight: 57,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: "#174A2C",
+    borderRadius: 13,
+    backgroundColor: "#0D2015",
+  },
+  motivationCopy: {
+    flex: 1,
+  },
+  motivationTitle: {
+    color: "#78E75C",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  motivationSubtitle: {
+    color: "#C0C9C1",
+    fontSize: 8,
+    lineHeight: 11,
     marginTop: 3,
   },
   searchBox: {
-    height: 43,
+    height: 46,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
-    marginHorizontal: 15,
-    marginBottom: 10,
-    paddingHorizontal: 11,
+    marginHorizontal: 14,
+    marginBottom: 8,
+    paddingHorizontal: 13,
     borderWidth: 1,
-    borderColor: "#4C9A3A",
-    borderRadius: 9,
-    backgroundColor: "#151715",
+    borderColor: "#56C951",
+    borderRadius: 12,
+    backgroundColor: "#121915",
   },
   searchInput: {
     flex: 1,
     color: "#F4F5F2",
-    fontSize: 13,
+    fontSize: 12,
     paddingVertical: 0,
   },
   filterHeader: {
-    height: 40,
+    minHeight: 43,
     flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 15,
+    paddingHorizontal: 14,
   },
   filterTabs: {
+    flex: 1,
     flexDirection: "row",
-    gap: 6,
+    gap: 7,
+    marginRight: 8,
   },
   filterModeButton: {
-    minHeight: 32,
+    flex: 1,
+    minHeight: 39,
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
-    borderRadius: 7,
-    backgroundColor: "#272927",
+    gap: 6,
+    paddingHorizontal: 5,
+    borderWidth: 1,
+    borderColor: "#303733",
+    borderRadius: 11,
+    backgroundColor: "#191E1B",
   },
   filterModeButtonActive: {
-    backgroundColor: SportGymColors.primary,
+    borderColor: "#A4F47F",
+    backgroundColor: "#A5F47E",
   },
   filterModeText: {
-    color: "#D1D3CE",
+    color: "#D1D8D2",
     fontSize: 10,
     fontWeight: "700",
   },
   filterModeTextActive: {
-    color: "#FFFFFF",
+    color: "#182018",
   },
   clearText: {
     color: "#A9D399",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
   },
   filterScroll: {
@@ -1213,19 +1350,23 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   resultsHeader: {
-    height: 42,
+    minHeight: 53,
     flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginTop: 2,
-    paddingBottom: 3,
+    paddingHorizontal: 15,
+    paddingTop: 7,
+    paddingBottom: 5,
   },
   resultsTitle: {
     color: "#F1F2EF",
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "900",
+  },
+  groupBrowseTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   resultsCount: {
     color: "#929792",
@@ -1236,62 +1377,82 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   groupBrowseContent: {
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
   groupBrowseSubtitle: {
-    color: "#929792",
-    fontSize: 10,
-    marginTop: 3,
+    color: "#B0B8B3",
+    fontSize: 11,
+    marginTop: 4,
+    marginLeft: 30,
   },
   muscleGroupGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    rowGap: 12,
+    rowGap: 9,
     paddingHorizontal: 13,
-    paddingTop: 8,
+    paddingTop: 4,
+  },
+  muscleGroupGridWide: {
+    rowGap: 8,
   },
   muscleGroupCard: {
-    width: "31.6%",
-    minHeight: 164,
-    alignItems: "center",
-    padding: 5,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    backgroundColor: "#15191B",
+    minHeight: 132,
+    justifyContent: "center",
+    padding: 11,
+    borderWidth: 1,
+    borderRadius: 15,
+    backgroundColor: "#101613",
+    overflow: "hidden",
   },
   muscleGroupImageFrame: {
-    width: "100%",
-    height: 110,
+    position: "absolute",
+    right: -3,
+    bottom: -7,
+    width: "58%",
+    height: "112%",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    borderRadius: 8,
-    backgroundColor: "#202629",
+    borderRadius: 0,
   },
   muscleGroupImage: {
     width: "100%",
     height: "100%",
+    opacity: 0.9,
+  },
+  muscleGroupCopy: {
+    width: "70%",
+    zIndex: 1,
   },
   muscleGroupName: {
-    width: "100%",
     overflow: "hidden",
-    marginTop: 5,
-    paddingHorizontal: 3,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderRadius: 8,
-    backgroundColor: "#101314",
     color: "#F4F5F2",
-    textAlign: "center",
-    fontSize: 10,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "900",
   },
   muscleGroupCount: {
-    color: "#A7ABA3",
-    fontSize: 8,
-    marginTop: 3,
-    marginBottom: 1,
+    fontSize: 10,
+    marginTop: 4,
+    fontWeight: "700",
+  },
+  muscleGroupDescription: {
+    color: "#C0C8C2",
+    fontSize: 9,
+    lineHeight: 12,
+    marginTop: 8,
+  },
+  muscleGroupArrow: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
+    width: 29,
+    height: 29,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderRadius: 15,
+    zIndex: 2,
   },
   selectedGroupHeader: {
     minHeight: 43,

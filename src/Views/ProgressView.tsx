@@ -79,7 +79,7 @@ const blankHistory: ClientProgressHistory = {
 const blankWorkouts: WorkoutProgress = {
   totalExercises: 0,
   totalWorkouts: 0,
-  weeklyWorkouts: Array.from({ length: 7 }, () => 0),
+  weeklyExercises: Array.from({ length: 7 }, () => 0),
   recentWorkouts: [],
 };
 
@@ -659,8 +659,8 @@ export default function ProgressView() {
             </Card>
 
             <Card title="Tu semana de entrenamiento" icon="barbell-outline" action="Ver gráficas" onAction={() => navigate('Gráficas')}>
-              <BarChart values={clientWorkouts.weeklyWorkouts} labels={weekdays} />
-              <ThemedText style={styles.caption}>Cada barra representa tus sesiones completadas por día.</ThemedText>
+              <BarChart values={clientWorkouts.weeklyExercises} labels={weekdays} />
+              <ThemedText style={styles.caption}>Cada barra representa los ejercicios completados por día.</ThemedText>
             </Card>
 
             <Card title="Último entrenamiento" action="Historial" onAction={() => navigate('Historial')}>
@@ -694,9 +694,9 @@ export default function ProgressView() {
               </View>
               <Ionicons name="analytics-outline" size={27} color="#76C85A" />
             </View>
-            <Card title="Entrenamientos de esta semana" icon="barbell-outline">
-              <BarChart values={clientWorkouts.weeklyWorkouts} labels={weekdays} />
-              <ThemedText style={styles.caption}>Sesiones completadas por día</ThemedText>
+            <Card title="Ejercicios de esta semana" icon="barbell-outline">
+              <BarChart values={clientWorkouts.weeklyExercises} labels={weekdays} />
+              <ThemedText style={styles.caption}>Ejercicios completados por día</ThemedText>
             </Card>
             <Card title="Evolución del peso" icon="scale-outline" action="Registrar" onAction={() => navigate('Peso')}>
               {clientHistory.weights.length
@@ -1268,12 +1268,12 @@ function BarChart({ values, labels }: { values: number[]; labels: string[] }) {
       <View style={styles.chartSummary}>
         <View>
           <ThemedText style={styles.chartSummaryValue}>{total}</ThemedText>
-          <ThemedText style={styles.chartSummaryLabel}>{total === 1 ? 'sesión esta semana' : 'sesiones esta semana'}</ThemedText>
+          <ThemedText style={styles.chartSummaryLabel}>{total === 1 ? 'ejercicio esta semana' : 'ejercicios esta semana'}</ThemedText>
         </View>
         {total > 0 && (
           <View style={styles.chartHighlight}>
             <Ionicons name="flash-outline" size={14} color={SportGymColors.success} />
-            <ThemedText style={styles.chartHighlightText}>Más activo: {labels[bestDayIndex]}</ThemedText>
+            <ThemedText style={styles.chartHighlightText}>Más ejercicios: {labels[bestDayIndex]}</ThemedText>
           </View>
         )}
       </View>
