@@ -1,6 +1,6 @@
 import {
   calculateBMI,
-  calculateHealthFocusedTargetWeight,
+  calculateBMIReferenceTargetWeight,
   calculateHealthyWeightRange,
   getBMICategory,
 } from "./bmi-calculator";
@@ -109,22 +109,12 @@ function getHealthyWeightReply(
 
   const bmi = calculateBMI(weight, height);
   const category = getBMICategory(bmi);
-  const storedTarget =
-    typeof perfil?.pesoObjetivo === "number" &&
-    Number.isFinite(perfil.pesoObjetivo) &&
-    perfil.pesoObjetivo >= 20 &&
-    perfil.pesoObjetivo <= 400
-      ? perfil.pesoObjetivo
-      : null;
-  const suggestedTarget = calculateHealthFocusedTargetWeight(weight, height);
-  const target = storedTarget ?? suggestedTarget;
+  const target = calculateBMIReferenceTargetWeight(height);
   const targetText = target === null
     ? ""
-    : storedTarget !== null
-      ? ` Tu objetivo meta guardado es ${target.toFixed(1)} kg.`
-      : ` Como orientación, tu meta de peso para acercarte al rango sería ${target.toFixed(1)} kg.`;
+    : ` Como punto de referencia dentro de ese rango, un peso correspondiente a IMC 22 sería ${target.toFixed(1)} kg.`;
 
-  return `Con tus datos guardados (${age} años, ${height} cm y ${weight} kg), tu IMC es ${bmi.toFixed(1)} (${category}). Para adultos, el rango de referencia de IMC saludable de la OMS (18,5–24,9) corresponde aproximadamente a ${minWeight.toFixed(1)}–${maxWeight.toFixed(1)} kg.${targetText} La edad adulta no cambia la fórmula. Es una referencia, no un peso obligatorio; el IMC no considera por sí solo la composición corporal ni condiciones médicas.`;
+  return `Con tus datos guardados (${age} años, ${height} cm y ${weight} kg), tu IMC es ${bmi.toFixed(1)} (${category}). Para adultos, el rango de referencia de IMC saludable de la OMS (18,5–24,9) corresponde aproximadamente a ${minWeight.toFixed(1)}–${maxWeight.toFixed(1)} kg.${targetText} La OMS define un rango saludable, no un peso único obligatorio. IMC 22 se usa aquí como punto orientativo dentro del rango; el IMC no considera por sí solo la composición corporal ni condiciones médicas.`;
 }
 
 function delay(ms: number): Promise<void> {
@@ -137,12 +127,11 @@ function buildSystemPrompt(perfil?: any, recipesContext?: string) {
     const imc = calculateBMI(perfil.peso, perfil.altura);
     const { minWeight: pesoMin, maxWeight: pesoMax } =
       calculateHealthyWeightRange(perfil.altura);
+    const pesoReferencia = calculateBMIReferenceTargetWeight(perfil.altura);
     imcInfo = `
 |- IMC actual: ${imc.toFixed(1)} (${getBMICategory(imc)})
-|- Rango de peso saludable: ${pesoMin.toFixed(1)} kg - ${pesoMax.toFixed(1)} kg`;
-    if (typeof perfil.pesoObjetivo === "number") {
-      imcInfo += `\n|- Peso objetivo guardado: ${perfil.pesoObjetivo.toFixed(1)} kg`;
-    }
+|- Rango de peso saludable OMS: ${pesoMin.toFixed(1)} kg - ${pesoMax.toFixed(1)} kg
+|- Peso de referencia orientativo (IMC 22): ${pesoReferencia ?? "no disponible"} kg`;
   }
 
   const perfilTexto = perfil ? `

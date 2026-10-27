@@ -25,7 +25,7 @@ import {
     type ClientProgressHistory,
 } from '../../assets/database/firebase';
 import {
-  calculateHealthFocusedTargetWeight,
+  calculateBMIReferenceTargetWeight,
   calculateHealthyWeightRange,
   getCompleteBMIAnalysis,
 } from '../lib/bmi-calculator';
@@ -125,6 +125,16 @@ const convertWeightInput = (value: string, fromUnit: WeightUnit, toUnit: WeightU
     ? formatNumber(weightFromKg(weightToKg(parsed, fromUnit), toUnit))
     : value;
 };
+const calculateProgressPercentage = (
+  current: number | null,
+  initial: number | null,
+  target: number | null,
+) =>
+  current !== null && initial !== null && target !== null && initial !== target
+    ? Math.max(0, Math.min(100, (1 - Math.abs(current - target) / Math.abs(initial - target)) * 100))
+    : current !== null && current === target
+      ? 100
+      : 0;
 
 export default function ProgressView() {
   const { user, setUser } = useAuth();
@@ -138,7 +148,6 @@ export default function ProgressView() {
   const [historyErrorId, setHistoryErrorId] = useState<string | null>(null);
   const [workoutErrorId, setWorkoutErrorId] = useState<string | null>(null);
   const [goalInput, setGoalInput] = useState(user?.goal ?? '');
-  const [targetInput, setTargetInput] = useState('');
   const [weightInput, setWeightInput] = useState(user?.weight?.toString() ?? '');
   const [weightConfirmation, setWeightConfirmation] = useState(false);
   const [saveConfirmation, setSaveConfirmation] = useState<SaveConfirmation | null>(null);
@@ -163,11 +172,6 @@ export default function ProgressView() {
         if (!active) return;
         setHistory(result);
         setGoalInput(result.goal ?? user?.goal ?? '');
-        setTargetInput(
-          result.targetWeight === null
-            ? ''
-            : formatNumber(weightFromKg(result.targetWeight, weightUnitRef.current)),
-        );
         setHistoryErrorId(null);
         setLoadedHistoryId(clientId);
       },
@@ -210,7 +214,6 @@ export default function ProgressView() {
           const previousUnit = weightUnitRef.current;
           if (previousUnit !== nextUnit) {
             setWeightInput((value) => convertWeightInput(value, previousUnit, nextUnit));
-            setTargetInput((value) => convertWeightInput(value, previousUnit, nextUnit));
           }
           weightUnitRef.current = nextUnit;
           setWeightUnit(nextUnit);
@@ -222,7 +225,6 @@ export default function ProgressView() {
           const previousUnit = weightUnitRef.current;
           if (previousUnit !== 'kg') {
             setWeightInput((value) => convertWeightInput(value, previousUnit, 'kg'));
-            setTargetInput((value) => convertWeightInput(value, previousUnit, 'kg'));
           }
           weightUnitRef.current = 'kg';
           setWeightUnit('kg');
@@ -262,11 +264,8 @@ export default function ProgressView() {
   const healthyWeightRange =
     adultProfile ? calculateHealthyWeightRange(user.height!) : null;
   const recommendedTargetWeight =
-    adultProfile && currentWeight !== null
-      ? calculateHealthFocusedTargetWeight(currentWeight, user.height!)
-      : null;
-  const progressTargetWeight =
-    clientHistory.targetWeight ?? recommendedTargetWeight;
+    adultProfile ? calculateBMIReferenceTargetWeight(user.height!) : null;
+  const progressTargetWeight = recommendedTargetWeight;
   const previousWeight = clientHistory.weights.at(-1)?.weight ?? user?.weight ?? null;
   const weightComparisonSource =
     clientHistory.weights.length > 0 ? 'tu último registro' : 'el peso guardado en tu perfil';
@@ -278,20 +277,13 @@ export default function ProgressView() {
     previousWeight === null || !Number.isFinite(parsedWeightInputKg)
       ? null
       : parsedWeightInputKg - previousWeight;
-  const targetNumber = Number(targetInput.replace(',', '.'));
-  const targetWeightKg = Number.isFinite(targetNumber)
-    ? weightToKg(targetNumber, weightUnit)
-    : Number.NaN;
-  const targetValid =
-    targetInput.trim() !== '' &&
-    Number.isFinite(targetWeightKg) &&
-    (healthyWeightRange
-      ? targetWeightKg >= healthyWeightRange.minWeight &&
-        targetWeightKg <= healthyWeightRange.maxWeight
-      : targetWeightKg >= 20 && targetWeightKg <= 400);
+  const distanceToReference =
+    currentWeight !== null && recommendedTargetWeight !== null
+      ? Math.abs(currentWeight - recommendedTargetWeight)
+      : null;
   const expectedWeeks =
-    currentWeight !== null && targetValid
-      ? Math.max(1, Math.ceil(Math.abs(currentWeight - targetWeightKg) / 0.5))
+    distanceToReference !== null
+      ? Math.max(1, Math.ceil(distanceToReference / 0.5))
       : null;
   const projectionWeeks =
     currentWeight !== null && progressTargetWeight !== null
@@ -311,16 +303,6 @@ export default function ProgressView() {
     setSaveConfirmation(null);
     if (destination === 'Objetivo') {
       setGoalInput(clientHistory.goal ?? user?.goal ?? '');
-      setTargetInput(
-        (clientHistory.targetWeight ?? recommendedTargetWeight) === null
-          ? ''
-          : formatNumber(
-              weightFromKg(
-                (clientHistory.targetWeight ?? recommendedTargetWeight)!,
-                weightUnit,
-              ),
-            ),
-      );
     }
     if (destination === 'Peso') {
       setWeightInput(
@@ -336,7 +318,6 @@ export default function ProgressView() {
   const changeWeightUnit = (nextUnit: WeightUnit) => {
     if (nextUnit === weightUnit || !clientId || !weightUnitReady) return;
     setWeightInput(convertWeightInput(weightInput, weightUnit, nextUnit));
-    setTargetInput(convertWeightInput(targetInput, weightUnit, nextUnit));
     weightUnitRef.current = nextUnit;
     setWeightUnit(nextUnit);
     AsyncStorage.setItem(`progress-weight-unit:${clientId}`, nextUnit).catch((error) => {
@@ -357,19 +338,9 @@ export default function ProgressView() {
       Alert.alert('Selecciona un objetivo', 'Elige una meta para continuar.');
       return;
     }
-    if (targetInput.trim() && !targetValid) {
-      Alert.alert(
-        'Peso meta fuera del rango',
-        healthyWeightRange
-          ? `Para tu estatura, elige una meta entre ${formatWeight(healthyWeightRange.minWeight, weightUnit)} y ${formatWeight(healthyWeightRange.maxWeight, weightUnit)}.`
-          : `Ingresa una meta entre ${formatWeight(20, weightUnit)} y ${formatWeight(400, weightUnit)}.`,
-      );
-      return;
-    }
-
     setSaving(true);
     try {
-      const nextTarget = targetInput.trim() ? targetWeightKg : null;
+      const nextTarget = recommendedTargetWeight;
       await updateClientProgressGoal(clientId, goalInput.trim(), nextTarget);
       setHistory((previous) => ({
         ...previous,
@@ -536,68 +507,103 @@ export default function ProgressView() {
         return (
           <>
             <View style={styles.goalCard}>
+              <View pointerEvents="none" style={styles.goalGlowOne} />
+              <View pointerEvents="none" style={styles.goalGlowTwo} />
               <View style={styles.row}>
                 <View style={styles.heroIcon}>
                   <Ionicons name="trending-up" size={20} color="#FFFFFF" />
                 </View>
                 <View style={styles.flex}>
-                  <ThemedText style={styles.eyebrow}>TU OBJETIVO</ThemedText>
+                  <ThemedText style={styles.eyebrow}>TU ENFOQUE ACTUAL</ThemedText>
                   <ThemedText style={styles.heroTitle}>
                     {clientHistory.goal ?? user?.goal ?? 'Define tu objetivo'}
                   </ThemedText>
+                  <ThemedText style={styles.goalSubtitle}>Pequeños pasos, grandes cambios.</ThemedText>
                 </View>
-                <Pressable onPress={() => navigate('Objetivo')} accessibilityRole="button">
-                  <Ionicons name="create-outline" size={21} color={SportGymColors.success} />
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => navigate('Objetivo')}
+                  style={styles.goalEditButton}
+                >
+                  <Ionicons name="create-outline" size={16} color="#FFFFFF" />
+                  <ThemedText style={styles.goalEditText}>Editar</ThemedText>
                 </Pressable>
               </View>
-              <View style={styles.divider} />
-              <View style={styles.weightPair}>
-                <View>
-                  <ThemedText style={styles.labelSmall}>Peso actual</ThemedText>
-                  <ThemedText style={styles.weightLarge}>
-                    {currentWeight === null ? 'Sin registro' : formatWeight(currentWeight, weightUnit)}
-                  </ThemedText>
+            </View>
+
+            <View style={styles.weightOverview}>
+              <View style={styles.weightOverviewColumn}>
+                <View style={styles.overviewIcon}>
+                  <Ionicons name="scale-outline" size={19} color={SportGymColors.success} />
                 </View>
-                <Ionicons name="arrow-forward" size={22} color={SportGymColors.success} />
-                <View style={styles.alignRight}>
-                  <ThemedText style={styles.labelSmall}>
-                    {clientHistory.targetWeight === null && recommendedTargetWeight !== null
-                      ? 'Meta sugerida'
-                      : 'Peso meta'}
+                <ThemedText style={styles.labelSmall}>Peso actual</ThemedText>
+                <ThemedText style={styles.weightLarge}>
+                  {currentWeight === null ? '—' : formatWeight(currentWeight, weightUnit)}
+                </ThemedText>
+                <ThemedText style={styles.overviewHint}>
+                  {latestWeightDate ? `Último registro · ${formatDate(latestWeightDate)}` : 'Aún sin registro'}
+                </ThemedText>
+              </View>
+              <View style={styles.overviewDivider} />
+              <View style={styles.overviewProgress}>
+                <View style={styles.progressRing}>
+                  <Ionicons name="flag-outline" size={18} color={SportGymColors.success} />
+                  <ThemedText style={styles.progressRingValue}>
+                    {currentWeight !== null && progressTargetWeight !== null
+                      ? `${Math.round(calculateProgressPercentage(
+                          currentWeight,
+                          clientHistory.weights[0]?.weight ?? currentWeight,
+                          progressTargetWeight,
+                        ))}%`
+                      : '—'}
                   </ThemedText>
-                  <ThemedText style={styles.weightLarge}>
-                    {progressTargetWeight === null
-                      ? 'Por definir'
-                      : formatWeight(progressTargetWeight, weightUnit)}
-                  </ThemedText>
+                  <ThemedText style={styles.progressRingCaption}>avance</ThemedText>
                 </View>
               </View>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => navigate('Peso')}
-                style={styles.updateWeightButton}
-              >
-                <Ionicons name="create-outline" size={17} color="#FFFFFF" />
-                <ThemedText style={styles.updateWeightButtonText}>
-                  {latestWeightDate === todayKey() ? 'Editar peso de hoy' : 'Actualizar peso actual'}
-                </ThemedText>
-                <Ionicons name="chevron-forward" size={16} color="#D9EAD8" />
-              </Pressable>
-              {healthyWeightRange && (
-                <View style={styles.weightPair}>
-                  <View>
-                    <ThemedText style={styles.labelSmall}>Rango de referencia OMS</ThemedText>
-                    <ThemedText style={styles.weightLarge}>
-                      {formatWeight(healthyWeightRange.minWeight, weightUnit)} - {formatWeight(healthyWeightRange.maxWeight, weightUnit)}
-                    </ThemedText>
-                  </View>
+              <View style={styles.overviewDivider} />
+              <View style={[styles.weightOverviewColumn, styles.weightOverviewColumnRight]}>
+                <View style={[styles.overviewIcon, styles.overviewIconMuted]}>
+                  <Ionicons name="flag-outline" size={19} color="#C8D7CA" />
                 </View>
-              )}
+                <ThemedText style={styles.labelSmall}>Peso meta OMS · IMC 22</ThemedText>
+                <ThemedText style={styles.weightLarge}>
+                  {progressTargetWeight === null ? 'Por definir' : formatWeight(progressTargetWeight, weightUnit)}
+                </ThemedText>
+                <ThemedText style={styles.overviewHint}>
+                  {currentWeight !== null && progressTargetWeight !== null
+                    ? `${formatWeight(Math.abs(currentWeight - progressTargetWeight), weightUnit)} por alcanzar`
+                    : 'Con base en tus datos'}
+                </ThemedText>
+              </View>
             </View>
+            <View style={styles.rangeStrip}>
+              <Ionicons name="heart-outline" size={17} color={SportGymColors.success} />
+              <View style={styles.flex}>
+                <ThemedText style={styles.rangeStripTitle}>Referencia saludable · OMS</ThemedText>
+                <ThemedText style={styles.rangeStripValue}>
+                  {healthyWeightRange
+                    ? `${formatWeight(healthyWeightRange.minWeight, weightUnit)} – ${formatWeight(healthyWeightRange.maxWeight, weightUnit)}`
+                    : 'Completa tu estatura y edad adulta'}
+                </ThemedText>
+              </View>
+              <Ionicons name="information-circle-outline" size={18} color="#89958B" />
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigate('Peso')}
+              style={styles.updateWeightButton}
+            >
+              <Ionicons name="create-outline" size={17} color="#FFFFFF" />
+              <ThemedText style={styles.updateWeightButtonText}>
+                {latestWeightDate === todayKey() ? 'Editar peso de hoy' : 'Actualizar peso actual'}
+              </ThemedText>
+              <Ionicons name="chevron-forward" size={16} color="#D9EAD8" />
+            </Pressable>
 
             <Card
               title="IMC y referencia saludable"
-              action="Editar meta"
+              icon="heart-outline"
+              action="Editar objetivo"
               onAction={() => navigate('Objetivo')}
             >
               {currentWeight !== null && adultProfile ? (() => {
@@ -611,13 +617,15 @@ export default function ProgressView() {
                   <>
                     <Metric label="IMC actual" value={formatNumber(bmiAnalysis.currentBMI ?? 0)} detail={bmiAnalysis.category} />
                     <Metric label="Rango de referencia OMS" value={`${formatWeight(bmiAnalysis.minWeight, weightUnit)} - ${formatWeight(bmiAnalysis.maxWeight, weightUnit)}`} detail="Para adultos, según tu estatura" />
-                    {clientHistory.targetWeight !== null ? (
-                      <Metric label="Tu meta guardada" value={formatWeight(clientHistory.targetWeight, weightUnit)} detail={clientHistory.goal ?? user?.goal ?? 'Objetivo personalizado'} />
-                    ) : recommendedTargetWeight !== null ? (
-                      <Metric label="Meta sugerida" value={formatWeight(recommendedTargetWeight, weightUnit)} detail="Puedes editarla en Objetivo" />
-                    ) : null}
+                    {recommendedTargetWeight !== null && (
+                      <Metric
+                        label="Referencia de peso · IMC 22"
+                        value={formatWeight(recommendedTargetWeight, weightUnit)}
+                        detail="Punto orientativo dentro del rango saludable"
+                      />
+                    )}
                     <ThemedText style={styles.caption}>{bmiAnalysis.recommendation}</ThemedText>
-                    <ThemedText style={styles.caption}>El IMC es una referencia general y no sustituye una valoración profesional.</ThemedText>
+                    <ThemedText style={styles.caption}>La OMS define un rango saludable, no un peso único. IMC 22 es una referencia orientativa; el IMC no sustituye una valoración profesional.</ThemedText>
                   </>
                 );
               })() : (
@@ -637,7 +645,7 @@ export default function ProgressView() {
             {workoutError && <Notice text="No se pudieron cargar tus entrenamientos." />}
             {attendance.attendanceError && <Notice text="No se pudieron consultar tus asistencias." />}
 
-            <Card title="Avance de tu objetivo" action="Ver detalle" onAction={() => navigate('Proyección')}>
+            <Card title="Avance de tu objetivo" icon="flag-outline" action="Ver detalle" onAction={() => navigate('Proyección')}>
               <ProgressMeter
                 current={currentWeight}
                 initial={clientHistory.weights[0]?.weight ?? null}
@@ -650,9 +658,9 @@ export default function ProgressView() {
               </View>
             </Card>
 
-            <Card title="Esta semana" action="Ver gráficas" onAction={() => navigate('Gráficas')}>
+            <Card title="Tu semana de entrenamiento" icon="barbell-outline" action="Ver gráficas" onAction={() => navigate('Gráficas')}>
               <BarChart values={clientWorkouts.weeklyWorkouts} labels={weekdays} />
-              <ThemedText style={styles.caption}>Entrenamientos completados por día</ThemedText>
+              <ThemedText style={styles.caption}>Cada barra representa tus sesiones completadas por día.</ThemedText>
             </Card>
 
             <Card title="Último entrenamiento" action="Historial" onAction={() => navigate('Historial')}>
@@ -660,26 +668,51 @@ export default function ProgressView() {
                 ? <WorkoutRow workout={clientWorkouts.recentWorkouts[0]} />
                 : <ThemedText style={styles.bodyText}>{isLoadingWorkouts ? 'Cargando entrenamientos…' : 'Al completar una rutina aparecerá aquí.'}</ThemedText>}
             </Card>
+            <MotivationBanner
+              icon="sparkles-outline"
+              title="Vas por buen camino"
+              text={
+                clientHistory.weights.length > 0
+                  ? `Tu progreso ya cuenta con ${clientHistory.weights.length} ${clientHistory.weights.length === 1 ? 'registro' : 'registros'}. La constancia importa más que la prisa.`
+                  : 'Registra tu peso para empezar a visualizar tus avances semana a semana.'
+              }
+            />
             {historyError && <Notice text="No se pudo cargar tu historial de progreso." />}
           </>
         );
       case 'Gráficas':
         return (
           <>
-            <Card title="Entrenamientos de esta semana">
+            <View style={styles.graphIntro}>
+              <View pointerEvents="none" style={styles.graphIntroGlow} />
+              <View style={styles.graphIntroIcon}>
+                <Ionicons name="trending-up" size={24} color="#FFFFFF" />
+              </View>
+              <View style={styles.flex}>
+                <ThemedText style={styles.graphIntroTitle}>Tu progreso en el tiempo</ThemedText>
+                <ThemedText style={styles.graphIntroText}>Compara tus entrenamientos y cambios corporales.</ThemedText>
+              </View>
+              <Ionicons name="analytics-outline" size={27} color="#76C85A" />
+            </View>
+            <Card title="Entrenamientos de esta semana" icon="barbell-outline">
               <BarChart values={clientWorkouts.weeklyWorkouts} labels={weekdays} />
               <ThemedText style={styles.caption}>Sesiones completadas por día</ThemedText>
             </Card>
-            <Card title="Evolución del peso" action="Registrar" onAction={() => navigate('Peso')}>
+            <Card title="Evolución del peso" icon="scale-outline" action="Registrar" onAction={() => navigate('Peso')}>
               {clientHistory.weights.length
                 ? <WeightChart weights={clientHistory.weights} unit={weightUnit} />
                 : <Empty title="Sin registros todavía" text="Registra tu peso para crear la gráfica." icon="scale-outline" action="Registrar peso" onAction={() => navigate('Peso')} />}
             </Card>
-            <Card title="Medidas corporales" action="Registrar" onAction={() => navigate('Medidas')}>
+            <Card title="Medidas corporales" icon="body-outline" action="Registrar" onAction={() => navigate('Medidas')}>
               {clientHistory.measurements.length
                 ? <MeasurementTrends entries={clientHistory.measurements} />
                 : <Empty title="Aún no hay medidas" text="Guarda tus medidas para comparar su evolución aquí." icon="body-outline" action="Registrar medidas" onAction={() => navigate('Medidas')} />}
             </Card>
+            <MotivationBanner
+              icon="bulb-outline"
+              title="Cada dato te da perspectiva"
+              text="Registra tus avances con regularidad y observa las tendencias, no solo un día aislado."
+            />
           </>
         );
       case 'Logros':
@@ -729,7 +762,7 @@ export default function ProgressView() {
       case 'Objetivo':
         return (
           <Card title="Selecciona tu objetivo principal">
-            <ThemedText style={styles.bodyText}>Tu objetivo se guarda en el perfil de tu cuenta y puedes cambiarlo en cualquier momento.</ThemedText>
+            <ThemedText style={styles.bodyText}>Tu objetivo de entrenamiento se guarda en tu perfil. El peso de referencia se calcula automáticamente según tu estatura y no tienes que ingresarlo.</ThemedText>
             {goals.map((item) => {
               const selected = goalInput === item.label;
               return (
@@ -746,48 +779,27 @@ export default function ProgressView() {
                 </Pressable>
               );
             })}
-            <Field
-              label={
-                healthyWeightRange
-                  ? `Peso meta (${weightUnit}) · rango ${formatNumber(weightFromKg(healthyWeightRange.minWeight, weightUnit))}–${formatNumber(weightFromKg(healthyWeightRange.maxWeight, weightUnit))}`
-                  : `Peso meta (${weightUnit}), puedes editarlo`
-              }
-            />
-            <TextInput
-              accessibilityLabel={`Peso meta en ${weightUnit}`}
-              value={targetInput}
-              onChangeText={setTargetInput}
-              keyboardType="decimal-pad"
-              placeholder={
-                healthyWeightRange
-                  ? `${formatNumber(weightFromKg(healthyWeightRange.minWeight, weightUnit))}–${formatNumber(weightFromKg(healthyWeightRange.maxWeight, weightUnit))}`
-                  : 'Ej. 65'
-              }
-              placeholderTextColor="#89908C"
-              style={styles.input}
-            />
-            {healthyWeightRange && (
-              <Notice
-                text={`Puedes elegir una meta entre ${formatWeight(healthyWeightRange.minWeight, weightUnit)} y ${formatWeight(healthyWeightRange.maxWeight, weightUnit)}, según el rango de referencia OMS para tu estatura.`}
-              />
-            )}
-            {targetInput.trim() && !targetValid && (
-              <Notice
-                text={
-                  healthyWeightRange
-                    ? `La meta debe estar entre ${formatWeight(healthyWeightRange.minWeight, weightUnit)} y ${formatWeight(healthyWeightRange.maxWeight, weightUnit)}.`
-                    : `Ingresa una meta entre ${formatWeight(20, weightUnit)} y ${formatWeight(400, weightUnit)}.`
-                }
-              />
-            )}
-            {recommendedTargetWeight !== null && clientHistory.targetWeight === null && (
-              <Notice text={`Meta sugerida: ${formatWeight(recommendedTargetWeight, weightUnit)}, calculada para acercarte al rango OMS de ${formatWeight(healthyWeightRange!.minWeight, weightUnit)}–${formatWeight(healthyWeightRange!.maxWeight, weightUnit)}. Puedes editarla antes de guardar.`} />
-            )}
-            {typeof user?.age === 'number' && user.age < 18 && (
-              <Notice text="No se sugiere un peso meta con el IMC adulto. Para menores de 18 años se utilizan curvas de crecimiento." />
-            )}
+            <View style={styles.bmiReferenceCard}>
+              <View style={styles.bmiReferenceIcon}>
+                <Ionicons name="heart-outline" size={20} color={SportGymColors.success} />
+              </View>
+              <View style={styles.flex}>
+                <ThemedText style={styles.metricLabel}>Peso meta de referencia · OMS</ThemedText>
+                <ThemedText style={styles.bmiReferenceValue}>
+                  {recommendedTargetWeight === null
+                    ? 'Disponible para adultos con estatura registrada'
+                    : formatWeight(recommendedTargetWeight, weightUnit)}
+                </ThemedText>
+                <ThemedText style={styles.labelSmall}>
+                  {healthyWeightRange
+                    ? `IMC 22 · rango saludable ${formatWeight(healthyWeightRange.minWeight, weightUnit)}–${formatWeight(healthyWeightRange.maxWeight, weightUnit)}`
+                    : 'Fórmula: 22 × estatura² (en metros)'}
+                </ThemedText>
+              </View>
+            </View>
+            <Notice text="La OMS define un rango de IMC saludable para adultos, no un peso único obligatorio. IMC 22 se muestra solo como referencia dentro de ese rango. En menores de 18 años se usan curvas de crecimiento." />
             {expectedWeeks !== null && (
-              <Notice text={`Estimación orientativa: ${expectedWeeks} semanas a ${formatWeight(0.5, weightUnit)} por semana. No sustituye asesoría profesional.`} />
+              <Notice text={`Estás a ${formatWeight(distanceToReference ?? 0, weightUnit)} de la referencia. La estimación lineal de ${expectedWeeks} semanas a ${formatWeight(0.5, weightUnit)} por semana es orientativa y no sustituye asesoría profesional.`} />
             )}
             <PrimaryButton label="Guardar objetivo" loading={saving} onPress={saveGoal} />
           </Card>
@@ -812,9 +824,7 @@ export default function ProgressView() {
             {currentWeight !== null && progressTargetWeight !== null ? (
               <Card title="Proyección estimada">
                 <ThemedText style={styles.bodyText}>
-                  {clientHistory.targetWeight === null
-                    ? 'La proyección usa una meta sugerida a partir de tus datos guardados y el rango OMS para adultos. Guarda o ajusta la meta en Objetivo para personalizarla.'
-                    : `Referencia visual calculada a ${formatWeight(0.5, weightUnit)} por semana. El resultado real depende de tu entrenamiento y seguimiento.`}
+                  {`La meta se calcula como referencia de IMC 22 para tu estatura, dentro del rango saludable adulto de la OMS. La proyección de ${formatWeight(0.5, weightUnit)} por semana es solo orientativa.`}
                 </ThemedText>
                 <ProjectionList current={currentWeight} target={progressTargetWeight} unit={weightUnit} />
                 <Metric label="Tiempo orientativo" value={`${projectionWeeks ?? 1} semanas`} />
@@ -1057,11 +1067,13 @@ export default function ProgressView() {
 
 function Card({
   title,
+  icon,
   action,
   onAction,
   children,
 }: {
   title: string;
+  icon?: keyof typeof Ionicons.glyphMap;
   action?: string;
   onAction?: () => void;
   children: React.ReactNode;
@@ -1069,7 +1081,14 @@ function Card({
   return (
     <View style={styles.card}>
       <View style={styles.cardHeading}>
-        <ThemedText style={styles.cardTitle}>{title}</ThemedText>
+        <View style={styles.cardTitleGroup}>
+          {icon && (
+            <View style={styles.cardHeadingIcon}>
+              <Ionicons name={icon} size={17} color={SportGymColors.success} />
+            </View>
+          )}
+          <ThemedText style={styles.cardTitle}>{title}</ThemedText>
+        </View>
         {action && onAction && <Pressable onPress={onAction}><ThemedText style={styles.actionText}>{action}</ThemedText></Pressable>}
       </View>
       <View style={styles.cardBody}>{children}</View>
@@ -1089,6 +1108,11 @@ function ProgressNavigation({
     Gráficas: 'Compara tus sesiones y cambios corporales con el tiempo.',
     Logros: 'Celebra cada paso: tus hitos se desbloquean al avanzar.',
   };
+  const icons: Record<ProgressTab, keyof typeof Ionicons.glyphMap> = {
+    Resumen: 'stats-chart-outline',
+    Gráficas: 'trending-up-outline',
+    Logros: 'trophy-outline',
+  };
 
   return (
     <>
@@ -1101,24 +1125,51 @@ function ProgressNavigation({
             onPress={() => onSelect(tab)}
             style={[styles.tab, tab === page && styles.tabActive]}
           >
+            <Ionicons
+              name={icons[tab]}
+              size={17}
+              color={tab === page ? '#FFFFFF' : '#89958B'}
+            />
             <ThemedText style={[styles.tabText, tab === page && styles.tabTextActive]}>
               {tab}
             </ThemedText>
           </Pressable>
         ))}
       </View>
-      <View style={styles.sectionHint}>
-        <Ionicons name="sparkles-outline" size={16} color={SportGymColors.success} />
-        <ThemedText style={styles.sectionHintText}>{descriptions[page]}</ThemedText>
-      </View>
+      <ThemedText style={styles.sectionHintText}>{descriptions[page]}</ThemedText>
     </>
+  );
+}
+
+function MotivationBanner({
+  icon,
+  title,
+  text,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  text: string;
+}) {
+  return (
+    <View style={styles.motivationBanner}>
+      <View style={styles.motivationIcon}>
+        <Ionicons name={icon} size={22} color="#1B6A37" />
+      </View>
+      <View style={styles.flex}>
+        <ThemedText style={styles.motivationTitle}>{title}</ThemedText>
+        <ThemedText style={styles.motivationText}>{text}</ThemedText>
+      </View>
+      <Ionicons name="trending-up" size={24} color="#2C8B4A" />
+    </View>
   );
 }
 
 function Stat({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
   return (
     <View style={styles.stat}>
-      <Ionicons name={icon} size={18} color={SportGymColors.success} />
+      <View style={styles.statIcon}>
+        <Ionicons name={icon} size={17} color={SportGymColors.success} />
+      </View>
       <ThemedText style={styles.statValue}>{value}</ThemedText>
       <ThemedText style={styles.statLabel}>{label}</ThemedText>
     </View>
@@ -1180,15 +1231,19 @@ function ProgressMeter({
   target: number | null;
   unit: WeightUnit;
 }) {
-  const percentage =
-    current !== null && initial !== null && target !== null && initial !== target
-      ? Math.max(0, Math.min(100, (1 - Math.abs(current - target) / Math.abs(initial - target)) * 100))
-      : current !== null && current === target
-        ? 100
-        : 0;
+  const percentage = calculateProgressPercentage(current, initial, target);
   const remaining = current !== null && target !== null ? Math.abs(current - target) : null;
   return (
     <View style={styles.meterGroup}>
+      <View style={styles.progressMeterHeading}>
+        <View style={styles.flex}>
+          <ThemedText style={styles.metricLabel}>Progreso hacia tu meta</ThemedText>
+          <ThemedText style={styles.labelSmall}>
+            {target === null ? 'Registra tu peso y define una meta' : 'Un paso a la vez'}
+          </ThemedText>
+        </View>
+        <ThemedText style={styles.progressMeterPercent}>{Math.round(percentage)}%</ThemedText>
+      </View>
       <View style={styles.meterTrack}>
         <View style={[styles.meterFill, { width: `${percentage}%` }]} />
       </View>
@@ -1260,6 +1315,12 @@ function WeightChart({
   const max = Math.max(...values.map((entry) => entry.weight));
   const range = Math.max(1, max - min);
   const change = values.at(-1)!.weight - values[0].weight;
+  const highestEntry = weights.reduce((highest, entry) =>
+    entry.weight > highest.weight ? entry : highest,
+  );
+  const lowestEntry = weights.reduce((lowest, entry) =>
+    entry.weight < lowest.weight ? entry : lowest,
+  );
   const changeLabel = values.length < 2
     ? '1 registro'
     : change === 0
@@ -1295,6 +1356,29 @@ function WeightChart({
           />
           <ThemedText style={styles.weightChangeText}>{changeLabel}</ThemedText>
         </View>
+      </View>
+      <View style={styles.weightHighlights}>
+        <WeightHighlight
+          icon="scale-outline"
+          label="Actual"
+          value={formatWeight(values.at(-1)!.weight, unit)}
+          detail={formatDate(values.at(-1)!.date)}
+          tone="green"
+        />
+        <WeightHighlight
+          icon="trending-up-outline"
+          label="Más alto"
+          value={formatWeight(highestEntry.weight, unit)}
+          detail={formatDate(highestEntry.date)}
+          tone="red"
+        />
+        <WeightHighlight
+          icon="trending-down-outline"
+          label="Más bajo"
+          value={formatWeight(lowestEntry.weight, unit)}
+          detail={formatDate(lowestEntry.date)}
+          tone="green"
+        />
       </View>
       <View style={styles.chartRange}>
         <ThemedText style={styles.chartRangeLabel}>Rango: {formatWeight(min, unit)}–{formatWeight(max, unit)}</ThemedText>
@@ -1490,6 +1574,31 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
   );
 }
 
+function WeightHighlight({
+  icon,
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  detail: string;
+  tone: 'green' | 'red';
+}) {
+  return (
+    <View style={[styles.weightHighlight, tone === 'red' && styles.weightHighlightRed]}>
+      <View style={[styles.weightHighlightIcon, tone === 'red' && styles.weightHighlightIconRed]}>
+        <Ionicons name={icon} size={16} color={tone === 'red' ? '#FF7485' : SportGymColors.success} />
+      </View>
+      <ThemedText style={styles.weightHighlightLabel}>{label}</ThemedText>
+      <ThemedText style={styles.weightHighlightValue}>{value}</ThemedText>
+      <ThemedText style={styles.weightHighlightDetail}>{detail}</ThemedText>
+    </View>
+  );
+}
+
 function Empty({ title, text, icon, action, onAction }: { title: string; text: string; icon: keyof typeof Ionicons.glyphMap; action: string; onAction: () => void }) {
   return (
     <View style={styles.empty}>
@@ -1520,10 +1629,10 @@ function Loading() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#080A08' },
+  screen: { flex: 1, backgroundColor: '#070A08' },
   safeArea: { flex: 1 },
-  frame: { flex: 1, marginHorizontal: 5, marginBottom: 4, borderWidth: 1, borderColor: '#303B32', borderRadius: 24, backgroundColor: '#0B0E0B', overflow: 'hidden' },
-  header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1E261F' },
+  frame: { flex: 1, marginHorizontal: 5, marginBottom: 4, borderWidth: 1, borderColor: '#26372B', borderRadius: 24, backgroundColor: '#0A0F0B', overflow: 'hidden' },
+  header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1D2A21', backgroundColor: '#0A0F0B' },
   back: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { flex: 1, color: '#F2F2F2', fontSize: 16, fontWeight: '800', textAlign: 'center' },
   unitToggle: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 10, backgroundColor: '#171D18', borderWidth: 1, borderColor: '#344137' },
@@ -1532,67 +1641,109 @@ const styles = StyleSheet.create({
   unitOptionDisabled: { opacity: 0.55 },
   unitOptionText: { color: '#A8B2AA', fontSize: 11, fontWeight: '800' },
   unitOptionTextSelected: { color: '#FFFFFF' },
-  content: { paddingHorizontal: 15, paddingTop: 12, paddingBottom: 16, gap: 13 },
-  tabs: { flexDirection: 'row', gap: 5, padding: 5, borderRadius: 13, backgroundColor: '#151A16', borderWidth: 1, borderColor: '#29322B' },
-  tab: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
-  tabActive: { backgroundColor: '#285C37', borderWidth: 1, borderColor: '#4C9A3A' },
-  tabText: { color: '#AEB4B0', fontSize: 12, fontWeight: '700' },
+  content: { paddingHorizontal: 13, paddingTop: 12, paddingBottom: 18, gap: 13 },
+  tabs: { flexDirection: 'row', gap: 5, padding: 5, borderRadius: 15, backgroundColor: '#101712', borderWidth: 1, borderColor: '#2A382E' },
+  tab: { flex: 1, minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10 },
+  tabActive: { backgroundColor: '#268345', borderWidth: 1, borderColor: '#51B75E' },
+  tabText: { color: '#AEB4B0', fontSize: 11, fontWeight: '700' },
   tabTextActive: { color: '#FFFFFF' },
-  sectionHint: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, paddingVertical: 1 },
-  sectionHintText: { flex: 1, color: '#AEB9B0', fontSize: 11, lineHeight: 16 },
-  goalCard: { padding: 17, borderRadius: 19, backgroundColor: '#14291A', borderWidth: 1, borderColor: '#456C4A' },
+  sectionHintText: { color: '#9CA99F', fontSize: 11, lineHeight: 16, paddingHorizontal: 5, marginTop: -7 },
+  goalCard: { position: 'relative', overflow: 'hidden', minHeight: 116, justifyContent: 'center', padding: 17, borderRadius: 19, backgroundColor: '#102419', borderWidth: 1, borderColor: '#31563A' },
+  goalGlowOne: { position: 'absolute', width: 180, height: 180, right: -55, top: -105, borderRadius: 90, backgroundColor: '#1C6A35', opacity: 0.26 },
+  goalGlowTwo: { position: 'absolute', width: 95, height: 95, right: 48, bottom: -70, borderRadius: 48, backgroundColor: '#37A64E', opacity: 0.16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  heroIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: SportGymColors.primary, justifyContent: 'center', alignItems: 'center' },
+  heroIcon: { width: 43, height: 43, borderRadius: 14, backgroundColor: '#277D3F', justifyContent: 'center', alignItems: 'center' },
   flex: { flex: 1 },
-  eyebrow: { color: '#A7C9AE', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
-  heroTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', marginTop: 3 },
-  divider: { height: 1, backgroundColor: '#35513D', marginVertical: 14 },
+  eyebrow: { color: '#7DDD75', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  heroTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', marginTop: 3 },
+  goalSubtitle: { color: '#A9BCAF', fontSize: 11, fontWeight: '500', marginTop: 4 },
+  goalEditButton: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, borderRadius: 9, backgroundColor: '#1B4D2B', borderWidth: 1, borderColor: '#43804A' },
+  goalEditText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
+  weightOverview: { minHeight: 152, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 5, paddingHorizontal: 8, paddingVertical: 13, borderRadius: 18, backgroundColor: '#101813', borderWidth: 1, borderColor: '#28392D' },
+  weightOverviewColumn: { flex: 1, alignItems: 'flex-start', gap: 5, paddingHorizontal: 5 },
+  weightOverviewColumnRight: { alignItems: 'flex-end' },
+  overviewIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', marginBottom: 2, borderRadius: 11, backgroundColor: '#1B3624' },
+  overviewIconMuted: { backgroundColor: '#202B23' },
+  overviewDivider: { width: 1, height: 96, backgroundColor: '#29352D' },
+  overviewProgress: { width: 82, alignItems: 'center', justifyContent: 'center' },
+  progressRing: { width: 76, height: 76, alignItems: 'center', justifyContent: 'center', borderRadius: 38, borderWidth: 4, borderColor: '#4C9A3A', backgroundColor: '#132319' },
+  progressRingValue: { color: '#FFFFFF', fontSize: 17, fontWeight: '900', marginTop: 1 },
+  progressRingCaption: { color: '#AAB6AC', fontSize: 9, fontWeight: '600' },
+  overviewHint: { color: '#96A398', fontSize: 9, lineHeight: 13 },
+  rangeStrip: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 13, paddingVertical: 9, borderRadius: 13, backgroundColor: '#121B15', borderWidth: 1, borderColor: '#29392E' },
+  rangeStripTitle: { color: '#E4EBE5', fontSize: 11, fontWeight: '700' },
+  rangeStripValue: { color: '#9FADA2', fontSize: 10, marginTop: 3 },
+  bmiReferenceCard: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 13, borderRadius: 13, backgroundColor: '#142219', borderWidth: 1, borderColor: '#31563A' },
+  bmiReferenceIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#1C3824' },
+  bmiReferenceValue: { color: '#FFFFFF', fontSize: 18, fontWeight: '900', marginTop: 4, marginBottom: 3 },
   weightPair: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   labelSmall: { color: '#A7AEA9', fontSize: 11, fontWeight: '500' },
-  weightLarge: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginTop: 4 },
+  weightLarge: { color: '#FFFFFF', fontSize: 18, fontWeight: '900', marginTop: 1 },
   alignRight: { alignItems: 'flex-end' },
-  updateWeightButton: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 15, paddingHorizontal: 12, borderRadius: 11, backgroundColor: '#367447' },
-  updateWeightButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  updateWeightButton: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 0, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#61C746', borderWidth: 1, borderColor: '#7BDF5A' },
+  updateWeightButtonText: { color: '#102316', fontSize: 12, fontWeight: '900' },
   stats: { flexDirection: 'row', gap: 8 },
-  stat: { flex: 1, minHeight: 88, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4, borderRadius: 14, backgroundColor: '#151A16', borderWidth: 1, borderColor: '#29332B' },
-  statValue: { color: '#F1F3F1', fontSize: 18, fontWeight: '800' },
+  stat: { flex: 1, minHeight: 95, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4, borderRadius: 15, backgroundColor: '#111813', borderWidth: 1, borderColor: '#2A392F' },
+  statIcon: { width: 31, height: 31, alignItems: 'center', justifyContent: 'center', marginBottom: 2, borderRadius: 10, backgroundColor: '#1C3524' },
+  statValue: { color: '#F1F3F1', fontSize: 18, fontWeight: '900' },
   statLabel: { color: '#AEB4B0', fontSize: 10, fontWeight: '600', textAlign: 'center' },
-  card: { padding: 15, borderRadius: 16, backgroundColor: '#151A16', borderWidth: 1, borderColor: '#29332B' },
-  cardHeading: { minHeight: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 },
-  cardTitle: { flex: 1, color: '#F2F4F2', fontSize: 15, fontWeight: '800' },
-  actionText: { color: '#91D174', fontSize: 12, fontWeight: '700' },
+  card: { padding: 15, borderRadius: 17, backgroundColor: '#111813', borderWidth: 1, borderColor: '#28372D' },
+  cardHeading: { minHeight: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 11 },
+  cardTitleGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  cardHeadingIcon: { width: 31, height: 31, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#1C3524' },
+  cardTitle: { flex: 1, color: '#F2F4F2', fontSize: 14, fontWeight: '800' },
+  actionText: { color: '#7AD865', fontSize: 11, fontWeight: '800' },
   cardBody: { gap: 12 },
   bodyText: { color: '#B5BCB7', fontSize: 12, lineHeight: 18 },
   actionRow: { flexDirection: 'row', gap: 8 },
-  actionButton: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 5, borderRadius: 9, borderWidth: 1, borderColor: '#3B5B40', backgroundColor: '#142119' },
+  actionButton: { flex: 1, minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 5, borderRadius: 11, borderWidth: 1, borderColor: '#3B6C42', backgroundColor: '#14241A' },
   actionButtonText: { color: '#E9F0EB', fontSize: 11, fontWeight: '700' },
-  meterGroup: { gap: 7 },
-  meterTrack: { height: 10, borderRadius: 6, overflow: 'hidden', backgroundColor: '#303A32' },
-  meterFill: { height: '100%', borderRadius: 6, backgroundColor: SportGymColors.success },
+  meterGroup: { gap: 9 },
+  progressMeterHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  progressMeterPercent: { color: '#8EE16B', fontSize: 22, fontWeight: '900' },
+  meterTrack: { height: 13, borderRadius: 8, overflow: 'hidden', backgroundColor: '#29362D' },
+  meterFill: { height: '100%', borderRadius: 8, backgroundColor: '#67D34D' },
+  graphIntro: { position: 'relative', overflow: 'hidden', minHeight: 94, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 17, backgroundColor: '#10251A', borderWidth: 1, borderColor: '#2D633B' },
+  graphIntroGlow: { position: 'absolute', width: 150, height: 150, right: -55, top: -80, borderRadius: 75, backgroundColor: '#2C8F43', opacity: 0.22 },
+  graphIntroIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: '#267B3D' },
+  graphIntroTitle: { color: '#F5F8F5', fontSize: 15, fontWeight: '800' },
+  graphIntroText: { color: '#AEBDB1', fontSize: 11, lineHeight: 16, marginTop: 4 },
   chartSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 15 },
   chartSummaryValue: { color: '#F1F5F1', fontSize: 22, fontWeight: '900' },
   chartSummaryLabel: { color: '#A3ADA5', fontSize: 10, fontWeight: '600', marginTop: 2 },
   chartHighlight: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 20, backgroundColor: '#213328' },
   chartHighlightText: { color: '#D6E7D8', fontSize: 10, fontWeight: '700' },
-  barChart: { height: 124, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', gap: 7, paddingTop: 4 },
-  barColumn: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
-  barValue: { height: 14, color: '#E2E7E3', fontSize: 9, fontWeight: '700' },
-  barTrack: { width: '72%', height: 78, justifyContent: 'flex-end', overflow: 'hidden', borderRadius: 7, backgroundColor: '#27302A' },
-  barFill: { width: '100%', borderRadius: 7, backgroundColor: '#4C9A3A' },
-  barFillToday: { backgroundColor: '#A0D65E' },
-  barLabel: { color: '#A3AAA5', fontSize: 10, fontWeight: '600' },
+  barChart: { height: 140, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'space-around', gap: 5, paddingTop: 3 },
+  barColumn: { flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 4, paddingVertical: 6, borderRadius: 11, backgroundColor: '#141C16', borderWidth: 1, borderColor: '#28352C' },
+  barValue: { height: 13, color: '#E2E7E3', fontSize: 9, fontWeight: '700' },
+  barTrack: { width: '70%', height: 72, justifyContent: 'flex-end', overflow: 'hidden', borderRadius: 7, backgroundColor: '#25332A' },
+  barFill: { width: '100%', borderRadius: 7, backgroundColor: '#25B950' },
+  barFillToday: { backgroundColor: '#89E763' },
+  barLabel: { color: '#A3AAA5', fontSize: 9, fontWeight: '700' },
   barLabelToday: { color: '#A0D65E', fontWeight: '800' },
-  caption: { color: '#949C96', fontSize: 10, textAlign: 'center', marginTop: 7 },
+  caption: { color: '#9CA99F', fontSize: 10, textAlign: 'center', marginTop: 5, lineHeight: 15 },
   weightSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14 },
   weightChange: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 20, backgroundColor: '#213328' },
   weightChangeText: { color: '#D6E7D8', fontSize: 10, fontWeight: '800' },
+  weightHighlights: { flexDirection: 'row', gap: 7, marginBottom: 3 },
+  weightHighlight: { flex: 1, minWidth: 0, gap: 3, padding: 9, borderRadius: 12, backgroundColor: '#141D16', borderWidth: 1, borderColor: '#2A3A2D' },
+  weightHighlightRed: { backgroundColor: '#211719', borderColor: '#462A2F' },
+  weightHighlightIcon: { width: 29, height: 29, alignItems: 'center', justifyContent: 'center', marginBottom: 2, borderRadius: 9, backgroundColor: '#1C3824' },
+  weightHighlightIconRed: { backgroundColor: '#3A2025' },
+  weightHighlightLabel: { color: '#AEB8B0', fontSize: 9, fontWeight: '600' },
+  weightHighlightValue: { color: '#F3F6F3', fontSize: 12, fontWeight: '900' },
+  weightHighlightDetail: { color: '#929D94', fontSize: 8, lineHeight: 11 },
   chartRange: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 7 },
   chartRangeLabel: { color: '#8F9A91', fontSize: 9 },
-  weightPlot: { position: 'relative', overflow: 'hidden', borderRadius: 10, backgroundColor: '#111712' },
-  weightGridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: '#29332B' },
-  weightLine: { position: 'absolute', height: 3, borderRadius: 2, backgroundColor: '#82C83F' },
-  weightPoint: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#4C9A3A', borderWidth: 2, borderColor: '#D6F0A5' },
-  weightPointLatest: { width: 13, height: 13, borderRadius: 7, backgroundColor: '#A0D65E', borderColor: '#F2FFD9' },
+  motivationBanner: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 11, padding: 14, borderRadius: 17, backgroundColor: '#D9F3DF', borderWidth: 1, borderColor: '#B9E6C3' },
+  motivationIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: '#F3FFF5' },
+  motivationTitle: { color: '#164D29', fontSize: 14, fontWeight: '900' },
+  motivationText: { color: '#385B42', fontSize: 10, lineHeight: 15, marginTop: 3 },
+  weightPlot: { position: 'relative', overflow: 'hidden', borderRadius: 12, backgroundColor: '#0E1510', borderWidth: 1, borderColor: '#26372B' },
+  weightGridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: '#27362B' },
+  weightLine: { position: 'absolute', height: 3, borderRadius: 2, backgroundColor: '#61D457' },
+  weightPoint: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#30B84C', borderWidth: 2, borderColor: '#C6F6A2' },
+  weightPointLatest: { width: 13, height: 13, borderRadius: 7, backgroundColor: '#8EE866', borderColor: '#F2FFD9' },
   weightDateAxis: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginTop: 7 },
   trends: { gap: 16 },
   trend: { gap: 7, paddingBottom: 11, borderBottomWidth: 1, borderBottomColor: '#29332B' },

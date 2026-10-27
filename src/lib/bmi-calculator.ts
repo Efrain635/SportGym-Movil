@@ -6,9 +6,20 @@ export interface BMIResult {
   recommendation: string;
 }
 
+export const WHO_REFERENCE_BMI = 22;
+
 export function calculateBMI(weight: number, height: number): number {
   const heightInMeters = height / 100;
   return weight / (heightInMeters * heightInMeters);
+}
+
+export function calculateBMIReferenceTargetWeight(height: number): number | null {
+  if (!Number.isFinite(height) || height < 100 || height > 250) {
+    return null;
+  }
+
+  const heightInMeters = height / 100;
+  return Math.round(WHO_REFERENCE_BMI * heightInMeters ** 2 * 10) / 10;
 }
 
 export function calculateHealthyWeightRange(height: number): {
