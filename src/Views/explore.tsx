@@ -146,49 +146,99 @@ const exerciseImageKeys = new Set(exerciseImages.keys());
 const muscleImageKeys = new Set(muscleImages.keys());
 const equipmentImageKeys = new Set(equipmentImages.keys());
 
-const muscleGroups = [
-  { id: "all", label: "Todos", bodyParts: [] as string[], image: "" },
+type MuscleGroup = {
+  id: string;
+  label: string;
+  bodyParts: string[];
+  primaryMuscles: string[];
+  image: string;
+  color: string;
+};
+
+const muscleGroups: MuscleGroup[] = [
   {
     id: "chest",
     label: "Pecho",
     bodyParts: ["chest"],
+    primaryMuscles: [],
     image: "pectoralis-major",
+    color: "#F3224B",
   },
   {
     id: "back",
     label: "Espalda",
     bodyParts: ["back"],
+    primaryMuscles: [],
     image: "latissimus-dorsi",
+    color: "#168BFF",
   },
   {
     id: "shoulders",
     label: "Hombros",
     bodyParts: ["shoulders"],
+    primaryMuscles: [],
     image: "anterior-deltoid",
+    color: "#FF7A00",
   },
   {
-    id: "arms",
-    label: "Brazos",
-    bodyParts: ["upper_arms", "lower_arms"],
+    id: "biceps",
+    label: "Bíceps",
+    bodyParts: [],
+    primaryMuscles: ["biceps_brachii", "brachialis"],
     image: "biceps-brachii",
+    color: "#19C653",
   },
   {
-    id: "core",
-    label: "Abdomen",
-    bodyParts: ["core"],
-    image: "rectus-abdominis",
+    id: "triceps",
+    label: "Tríceps",
+    bodyParts: [],
+    primaryMuscles: ["triceps_brachii"],
+    image: "triceps-brachii",
+    color: "#A42BEE",
+  },
+  {
+    id: "forearms",
+    label: "Antebrazos",
+    bodyParts: ["lower_arms"],
+    primaryMuscles: [
+      "brachioradialis",
+      "forearm_extensors",
+      "forearm_flexors",
+    ],
+    image: "forearm-flexors",
+    color: "#00A7CE",
   },
   {
     id: "legs",
     label: "Piernas",
     bodyParts: ["upper_legs", "lower_legs"],
+    primaryMuscles: [],
     image: "quadriceps",
+    color: "#F3224B",
+  },
+  {
+    id: "glutes",
+    label: "Glúteos",
+    bodyParts: [],
+    primaryMuscles: ["gluteus_maximus", "gluteus_medius"],
+    image: "gluteus-maximus",
+    color: "#E6A900",
+  },
+  {
+    id: "core",
+    label: "Abdomen",
+    bodyParts: ["core"],
+    primaryMuscles: [],
+    image: "rectus-abdominis",
+    color: "#18C64B",
   },
   {
     id: "full_body",
     label: "Cuerpo completo",
     bodyParts: ["full_body"],
+    primaryMuscles: [],
     image: "",
+    color: "#08A8D0",
   },
 ];
 
@@ -337,6 +387,15 @@ function getBodyPartName(bodyPart: string) {
   return names[bodyPart] || "Entrenamiento";
 }
 
+function matchesMuscleGroup(exercise: Exercise, group: MuscleGroup) {
+  return (
+    group.bodyParts.includes(exercise.body_part) ||
+    (exercise.primary_muscles || []).some((muscle) =>
+      group.primaryMuscles.includes(muscle),
+    )
+  );
+}
+
 export default function ExploreExercisesScreen() {
   const [query, setQuery] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("muscle");
@@ -356,7 +415,7 @@ export default function ExploreExercisesScreen() {
     const group = muscleGroups.find((item) => item.id === selectedMuscle);
     const matchesMuscle =
       selectedMuscle === "all" ||
-      Boolean(group?.bodyParts.includes(exercise.body_part));
+      Boolean(group && matchesMuscleGroup(exercise, group));
     const matchesEquipment =
       selectedEquipment === "all" ||
       (exercise.equipment || "bodyweight") === selectedEquipment;
@@ -410,6 +469,11 @@ export default function ExploreExercisesScreen() {
       : filterMode === "equipment"
         ? setSelectedEquipment
         : setSelectedFocus;
+  const isBrowsingMuscleGroups =
+    filterMode === "muscle" && selectedMuscle === "all" && query.trim() === "";
+  const selectedMuscleGroup = muscleGroups.find(
+    (group) => group.id === selectedMuscle,
+  );
 
   return (
     <View style={styles.screen}>
@@ -489,121 +553,232 @@ export default function ExploreExercisesScreen() {
             )}
           </View>
 
-          <ScrollView
-            horizontal
-            style={styles.filterScroll}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterList}
-            keyboardShouldPersistTaps="handled"
-          >
-            {visibleFilters.map((filter) => {
-              const selected = activeFilter === filter.id;
-              const filterImage =
-                filterMode === "muscle"
-                  ? getFilterImageSource(
-                      filter.image,
-                      muscleImageKeys,
-                      muscleImages,
-                    )
-                  : getFilterImageSource(
-                      filter.image,
-                      equipmentImageKeys,
-                      equipmentImages,
-                    );
+          {filterMode !== "muscle" ? (
+            <ScrollView
+              horizontal
+              style={styles.filterScroll}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterList}
+              keyboardShouldPersistTaps="handled"
+            >
+              {visibleFilters.map((filter) => {
+                const selected = activeFilter === filter.id;
+                const filterImage = getFilterImageSource(
+                  filter.image,
+                  equipmentImageKeys,
+                  equipmentImages,
+                );
 
-              return (
-                <Pressable
-                  key={filter.id}
-                  style={[
-                    styles.filterChip,
-                    selected && styles.filterChipSelected,
-                  ]}
-                  onPress={() => setActiveFilter(filter.id)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                >
-                  {filterImage ? (
-                    <Image
-                      source={filterImage}
-                      style={styles.filterIcon}
-                      contentFit="contain"
-                    />
-                  ) : null}
-                  <Text
+                return (
+                  <Pressable
+                    key={filter.id}
                     style={[
-                      styles.filterChipText,
-                      selected && styles.filterChipTextSelected,
+                      styles.filterChip,
+                      selected && styles.filterChipSelected,
                     ]}
+                    onPress={() => setActiveFilter(filter.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
                   >
-                    {filter.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          <View style={styles.resultsHeader}>
-            <Text style={styles.resultsTitle}>Ejercicios</Text>
-            <Text style={styles.resultsCount}>
-              {filteredExercises.length} resultados
-            </Text>
-          </View>
-
-          <FlatList
-            style={styles.exerciseList}
-            data={filteredExercises}
-            keyExtractor={(exercise) => exercise.id}
-            numColumns={3}
-            columnWrapperStyle={styles.exerciseRow}
-            contentContainerStyle={styles.exerciseGrid}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.exerciseCard,
-                  pressed && styles.cardPressed,
-                ]}
-                onPress={() => setSelectedExercise(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`Ver ${item.name_es}`}
-              >
-                <View style={styles.exerciseImageFrame}>
-                  {getImageSource(item) ? (
-                    <Image
-                      source={getImageSource(item)}
-                      style={styles.exerciseImage}
-                      contentFit="cover"
-                      transition={120}
-                    />
-                  ) : (
-                    <View style={styles.imageFallback}>
-                      <Ionicons
-                        name="barbell-outline"
-                        size={27}
-                        color="#7C9B70"
+                    {filterImage ? (
+                      <Image
+                        source={filterImage}
+                        style={styles.filterIcon}
+                        contentFit="contain"
                       />
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.exerciseName} numberOfLines={2}>
-                  {item.name_es}
-                </Text>
-                <Text style={styles.exerciseCategory} numberOfLines={1}>
-                  {getBodyPartName(item.body_part)}
-                </Text>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        selected && styles.filterChipTextSelected,
+                      ]}
+                    >
+                      {filter.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : selectedMuscleGroup ? (
+            <View style={styles.selectedGroupHeader}>
+              <Pressable
+                style={styles.changeGroupButton}
+                onPress={() => setSelectedMuscle("all")}
+                accessibilityRole="button"
+                accessibilityLabel="Cambiar grupo muscular"
+              >
+                <Ionicons name="arrow-back" size={17} color="#D8E9D0" />
+                <Text style={styles.changeGroupText}>Grupos</Text>
               </Pressable>
-            )}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Ionicons name="search-outline" size={34} color="#697065" />
-                <Text style={styles.emptyTitle}>No encontramos ejercicios</Text>
-                <Text style={styles.emptyCopy}>
-                  Prueba otra búsqueda o cambia los filtros.
+              <View
+                style={[
+                  styles.selectedGroupDot,
+                  { backgroundColor: selectedMuscleGroup.color },
+                ]}
+              />
+              <Text style={styles.selectedGroupTitle}>
+                {selectedMuscleGroup.label}
+              </Text>
+            </View>
+          ) : null}
+
+          {isBrowsingMuscleGroups ? (
+            <ScrollView
+              style={styles.groupBrowseList}
+              contentContainerStyle={styles.groupBrowseContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.resultsHeader}>
+                <View>
+                  <Text style={styles.resultsTitle}>Explora por grupo</Text>
+                  <Text style={styles.groupBrowseSubtitle}>
+                    Elige un músculo para ver sus ejercicios
+                  </Text>
+                </View>
+                <Text style={styles.resultsCount}>
+                  {muscleGroups.length} grupos
                 </Text>
               </View>
-            }
-          />
+              <View style={styles.muscleGroupGrid}>
+                {muscleGroups.map((group) => {
+                  const image = getFilterImageSource(
+                    group.image,
+                    muscleImageKeys,
+                    muscleImages,
+                  );
+                  const count = exercises.filter((exercise) =>
+                    matchesMuscleGroup(exercise, group),
+                  ).length;
+
+                  if (count === 0) return null;
+
+                  return (
+                    <Pressable
+                      key={group.id}
+                      style={({ pressed }) => [
+                        styles.muscleGroupCard,
+                        { borderColor: group.color },
+                        pressed && styles.cardPressed,
+                      ]}
+                      onPress={() => setSelectedMuscle(group.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${group.label}, ${count} ejercicios`}
+                    >
+                      <View style={styles.muscleGroupImageFrame}>
+                        {image ? (
+                          <Image
+                            source={image}
+                            style={styles.muscleGroupImage}
+                            contentFit="contain"
+                            transition={120}
+                          />
+                        ) : (
+                          <Ionicons
+                            name="body-outline"
+                            size={52}
+                            color={group.color}
+                          />
+                        )}
+                      </View>
+                      <Text
+                        style={[
+                          styles.muscleGroupName,
+                          { borderColor: group.color },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {group.label}
+                      </Text>
+                      <Text style={styles.muscleGroupCount}>
+                        {count} ejercicios
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          ) : (
+            <>
+              <View style={styles.resultsHeader}>
+                <Text style={styles.resultsTitle}>
+                  {selectedMuscleGroup
+                    ? `Ejercicios de ${selectedMuscleGroup.label}`
+                    : "Ejercicios"}
+                </Text>
+                <Text style={styles.resultsCount}>
+                  {filteredExercises.length} resultados
+                </Text>
+              </View>
+
+              <FlatList
+                style={styles.exerciseList}
+                data={filteredExercises}
+                keyExtractor={(exercise) => exercise.id}
+                contentContainerStyle={styles.exerciseListContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.exerciseRowCard,
+                      pressed && styles.cardPressed,
+                    ]}
+                    onPress={() => setSelectedExercise(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ver ${item.name_es}`}
+                  >
+                    <View style={styles.exerciseRowImageFrame}>
+                      {getImageSource(item) ? (
+                        <Image
+                          source={getImageSource(item)}
+                          style={styles.exerciseImage}
+                          contentFit="cover"
+                          transition={120}
+                        />
+                      ) : (
+                        <View style={styles.imageFallback}>
+                          <Ionicons
+                            name="barbell-outline"
+                            size={27}
+                            color="#7C9B70"
+                          />
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.exerciseRowCopy}>
+                      <Text style={styles.exerciseName} numberOfLines={2}>
+                        {item.name_es}
+                      </Text>
+                      <Text style={styles.exerciseCategory} numberOfLines={1}>
+                        {getBodyPartName(item.body_part)} ·{" "}
+                        {getEquipmentName(item.equipment || "bodyweight")}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={19}
+                      color="#899087"
+                    />
+                  </Pressable>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.emptyState}>
+                    <Ionicons
+                      name="search-outline"
+                      size={34}
+                      color="#697065"
+                    />
+                    <Text style={styles.emptyTitle}>
+                      No encontramos ejercicios
+                    </Text>
+                    <Text style={styles.emptyCopy}>
+                      Prueba otra búsqueda o cambia los filtros.
+                    </Text>
+                  </View>
+                }
+              />
+            </>
+          )}
 
           <AnimatedBottomNav
             initialIndex={bottomNavIndex}
@@ -1056,35 +1231,128 @@ const styles = StyleSheet.create({
     color: "#929792",
     fontSize: 11,
   },
-  exerciseGrid: {
-    flexGrow: 1,
-    paddingHorizontal: 13,
-    paddingTop: 5,
+  groupBrowseList: {
+    flex: 1,
+    minHeight: 0,
+  },
+  groupBrowseContent: {
     paddingBottom: 16,
   },
-  exerciseRow: {
-    gap: 10,
+  groupBrowseSubtitle: {
+    color: "#929792",
+    fontSize: 10,
+    marginTop: 3,
+  },
+  muscleGroupGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 12,
+    paddingHorizontal: 13,
+    paddingTop: 8,
+  },
+  muscleGroupCard: {
+    width: "31.6%",
+    minHeight: 164,
+    alignItems: "center",
+    padding: 5,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    backgroundColor: "#15191B",
+  },
+  muscleGroupImageFrame: {
+    width: "100%",
+    height: 110,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    borderRadius: 8,
+    backgroundColor: "#202629",
+  },
+  muscleGroupImage: {
+    width: "100%",
+    height: "100%",
+  },
+  muscleGroupName: {
+    width: "100%",
+    overflow: "hidden",
+    marginTop: 5,
+    paddingHorizontal: 3,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: "#101314",
+    color: "#F4F5F2",
+    textAlign: "center",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  muscleGroupCount: {
+    color: "#A7ABA3",
+    fontSize: 8,
+    marginTop: 3,
+    marginBottom: 1,
+  },
+  selectedGroupHeader: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderColor: "#252925",
+  },
+  changeGroupButton: {
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingRight: 8,
+  },
+  changeGroupText: {
+    color: "#D8E9D0",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  selectedGroupDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  selectedGroupTitle: {
+    color: "#F1F2EF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  exerciseListContent: {
+    flexGrow: 1,
+    paddingHorizontal: 14,
+    paddingTop: 7,
+    paddingBottom: 16,
   },
   exerciseList: {
     flex: 1,
     minHeight: 0,
   },
-  exerciseCard: {
-    flex: 1,
-    minWidth: 0,
-    marginBottom: 11,
-    padding: 6,
+  exerciseRowCard: {
+    minHeight: 94,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    padding: 8,
     borderWidth: 1,
     borderColor: "#2B2E2A",
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: "#151715",
   },
-  exerciseImageFrame: {
-    width: "100%",
-    aspectRatio: 1,
+  exerciseRowImageFrame: {
+    width: 76,
+    height: 76,
+    flexShrink: 0,
     overflow: "hidden",
-    borderRadius: 7,
+    borderRadius: 9,
     backgroundColor: "#D9EAF0",
+    marginRight: 11,
   },
   exerciseImage: {
     width: "100%",
@@ -1096,19 +1364,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#DDEBE0",
   },
+  exerciseRowCopy: {
+    flex: 1,
+    justifyContent: "center",
+    minWidth: 0,
+    paddingVertical: 4,
+  },
   exerciseName: {
-    minHeight: 31,
     color: "#F0F2EE",
-    fontSize: 10,
-    lineHeight: 13,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: "700",
-    marginTop: 6,
   },
   exerciseCategory: {
     color: "#A7C69B",
-    fontSize: 9,
-    marginTop: 2,
-    marginBottom: 3,
+    fontSize: 10,
+    marginTop: 5,
   },
   cardPressed: {
     opacity: 0.78,
