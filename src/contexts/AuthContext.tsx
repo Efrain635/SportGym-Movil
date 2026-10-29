@@ -78,10 +78,16 @@ function AuthStateProvider({ children }: { children: ReactNode }) {
 
       setIsRestoringSession(true);
       setUser(null);
-      void getAuthenticatedClientProfile(
-        firebaseUser.uid,
-        firebaseUser.email,
-      )
+      void firebaseUser
+        .getIdTokenResult()
+        .then((token) => {
+          const clientIdClaim = token.claims.clienteId;
+          return getAuthenticatedClientProfile(
+            firebaseUser.uid,
+            firebaseUser.email,
+            typeof clientIdClaim === "string" ? clientIdClaim : undefined,
+          );
+        })
         .then((profile) => {
           if (
             !isActive ||

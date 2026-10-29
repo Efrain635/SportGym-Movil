@@ -7,6 +7,7 @@ service cloud.firestore {
       return request.auth != null
         && (
           request.auth.uid == clientId
+          || request.auth.token.get("clienteId", "") == clientId
           || (
             exists(clientPath)
             && (
@@ -221,6 +222,36 @@ service cloud.firestore {
         && ownsClient(request.resource.data.clienteId);
 
       allow delete: if ownsClient(resource.data.clienteId);
+    }
+
+    match /favoritos/{favoriteId} {
+      allow create, update: if request.resource.data.clienteId is string
+        && request.resource.data.ejercicioId is string
+        && favoriteId
+          == request.resource.data.clienteId
+            + "_"
+            + request.resource.data.ejercicioId
+        && ownsClient(request.resource.data.clienteId);
+
+      allow read, delete: if ownsClient(resource.data.clienteId);
+    }
+
+    match /rutinas/{routineId} {
+      function validRoutineData() {
+        return request.resource.data.clienteId is string
+          && request.resource.data.ejercicioId is string
+          && request.resource.data.ejercicioNombre is string
+          && request.resource.data.dia is string
+          && ownsClient(request.resource.data.clienteId);
+      }
+
+      allow create: if validRoutineData();
+
+      allow update: if validRoutineData()
+        && resource.data.clienteId == request.resource.data.clienteId
+        && ownsClient(resource.data.clienteId);
+
+      allow read, delete: if ownsClient(resource.data.clienteId);
     }
 
     match /conversaciones_chatbot/{conversationId} {

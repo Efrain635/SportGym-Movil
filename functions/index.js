@@ -63,29 +63,37 @@ async function validateAndUpgradePassword(clienteRef, password) {
 }
 
 exports.loginCliente = onCall({ region: "us-central1" }, async (request) => {
-  const email = request.data?.email?.trim().toLowerCase();
+  const identifier = request.data?.email?.trim().toLowerCase();
   const password = request.data?.password;
 
   if (
-    typeof email !== "string" ||
-    !email ||
+    typeof identifier !== "string" ||
+    !identifier ||
     typeof password !== "string" ||
     !password
   ) {
-    throw new HttpsError("invalid-argument", "Correo y contraseña son obligatorios");
+    throw new HttpsError("invalid-argument", "Usuario o correo y contraseña son obligatorios");
   }
 
-  const clientesSnapshot = await db
-    .collection("clientes")
-    .where("correo", "==", email)
-    .limit(2)
-    .get();
+  const identifierFields = identifier.includes("@")
+    ? ["correo", "email"]
+    : ["usuario"];
+  const clientSnapshots = await Promise.all(
+    identifierFields.map((field) =>
+      db.collection("clientes").where(field, "==", identifier).limit(2).get(),
+    ),
+  );
+  const clients = new Map(
+    clientSnapshots.flatMap((snapshot) =>
+      snapshot.docs.map((client) => [client.id, client]),
+    ),
+  );
 
-  if (clientesSnapshot.size !== 1) {
+  if (clients.size !== 1) {
     throw new HttpsError("unauthenticated", "Credenciales inválidas");
   }
 
-  const clienteRef = clientesSnapshot.docs[0].ref;
+  const clienteRef = [...clients.values()][0].ref;
   const passwordIsValid = await validateAndUpgradePassword(clienteRef, password);
 
   if (!passwordIsValid) {

@@ -5,6 +5,7 @@ import {
     deleteUser,
     getAuth,
     initializeAuth,
+    signInWithCustomToken,
     sendPasswordResetEmail,
     signInWithEmailAndPassword,
     signOut,
@@ -14,6 +15,7 @@ import { getReactNativePersistence } from "firebase/auth";
 
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
     addDoc,
     collection,
@@ -46,6 +48,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+const functions = getFunctions(app, "us-central1");
 
 const createAuth = () => {
   if (Platform.OS === "web") {
@@ -198,15 +201,17 @@ export function getClientMembership(client: ClientRecord) {
 export async function getAuthenticatedClientProfile(
   uid: string,
   authEmail: string | null,
+  clientIdClaim?: string,
 ): Promise<(DocumentData & { documentId: string }) | null> {
   const userReference = doc(db, "users", uid);
-  const clientReference = doc(db, "clientes", uid);
+  const clientId = clientIdClaim || uid;
+  const clientReference = doc(db, "clientes", clientId);
   const [userSnapshot, clientSnapshot] = await Promise.all([
     getDoc(userReference),
     getDoc(clientReference),
   ]);
 
-  let clientDocumentId = uid;
+  let clientDocumentId = clientId;
   let matchedClientSnapshot = clientSnapshot;
 
   if (!clientSnapshot.exists() && authEmail?.trim()) {
@@ -298,10 +303,48 @@ export async function verifyClientCredentials(
   }
 
   const signInRegisteredUser = async (email: string) => {
-    const credential = await signInWithEmailAndPassword(auth, email, password);
+    let credential;
+    try {
+      credential = await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      const errorCode = (error as { code?: string }).code;
+      if (
+        errorCode !== "auth/invalid-credential" &&
+        errorCode !== "auth/user-not-found" &&
+        errorCode !== "auth/wrong-password"
+      ) {
+        throw error;
+      }
+
+      return signInLegacyClient(email);
+    }
+
     const userData = await getAuthenticatedClientProfile(
       credential.user.uid,
       credential.user.email,
+    );
+    if (!userData) {
+      throw new Error("client-profile-not-found");
+    }
+    return userData;
+  };
+
+  const signInLegacyClient = async (identifier: string) => {
+    const loginCliente = httpsCallable<
+      { email: string; password: string },
+      { token: string }
+    >(functions, "loginCliente");
+    const result = await loginCliente({
+      email: identifier.trim().toLowerCase(),
+      password,
+    });
+    const credential = await signInWithCustomToken(auth, result.data.token);
+    const token = await credential.user.getIdTokenResult();
+    const clientIdClaim = token.claims.clienteId;
+    const userData = await getAuthenticatedClientProfile(
+      credential.user.uid,
+      credential.user.email,
+      typeof clientIdClaim === "string" ? clientIdClaim : undefined,
     );
     if (!userData) {
       throw new Error("client-profile-not-found");
@@ -333,20 +376,7 @@ export async function verifyClientCredentials(
     return signInRegisteredUser(email.trim());
   }
 
-  const clientsQuery = query(
-    collection(db, "clientes"),
-    where("usuario", "==", normalizedUsername),
-    where("contrasena", "==", password),
-    limit(1),
-  );
-  const clientsSnapshot = await getDocs(clientsQuery);
-
-  if (clientsSnapshot.empty) {
-    throw new Error("invalid-credentials");
-  }
-
-  const clientDocument = clientsSnapshot.docs[0];
-  return { ...clientDocument.data(), documentId: clientDocument.id };
+  return signInLegacyClient(normalizedUsername);
 }
 
 type RoutineExerciseInput = {
