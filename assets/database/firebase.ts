@@ -805,7 +805,7 @@ export async function getClientWorkoutProgress(clientId: string) {
   const recentWorkouts = completedWorkouts
     .map((workout) => {
       const data = workout.data();
-      const rawDate = data.fechaInicio ?? data.fechaFinalizacion;
+      const rawDate = data.fechaFinalizacion ?? data.fechaInicio;
       const date =
         rawDate &&
         typeof rawDate === "object" &&

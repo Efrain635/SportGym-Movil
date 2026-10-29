@@ -1098,30 +1098,42 @@ function WorkoutSessionScreen({
 
   const handleFinishWorkout = async () => {
     if (!user?.clientId || !startedAt || isSaving || isCompleted) return;
-    const hasInvalidResults = sessionExercises.some((exercise) => {
-      const sets = Number(exercise.seriesRealizadas);
-      const repetitions = Number(exercise.repeticionesRealizadas);
-      const assignedSets = exercise.seriesAsignadas ?? 3;
-      const assignedRepetitions = exercise.repeticionesAsignadas ?? 12;
-      return (
-        !Number.isInteger(assignedSets) ||
-        assignedSets < 1 ||
-        assignedSets > 99 ||
-        !Number.isInteger(assignedRepetitions) ||
-        assignedRepetitions < 1 ||
-        assignedRepetitions > 999 ||
-        !Number.isInteger(sets) ||
-        sets < 1 ||
-        sets > 99 ||
-        !Number.isInteger(repetitions) ||
-        repetitions < 1 ||
-        repetitions > 999
-      );
-    });
+    const completedExercises: CompletedWorkoutExercise[] = sessionExercises.map(
+      (exercise) => {
+        const assignedSets = exercise.seriesAsignadas ?? 3;
+        const assignedRepetitions = exercise.repeticionesAsignadas ?? 12;
+        return {
+          ejercicioId: exercise.ejercicioId,
+          ejercicioNombre: exercise.ejercicioNombre,
+          seriesAsignadas: assignedSets,
+          repeticionesAsignadas: assignedRepetitions,
+          seriesRealizadas: exercise.seriesRealizadas.trim()
+            ? Number(exercise.seriesRealizadas)
+            : assignedSets,
+          repeticionesRealizadas: exercise.repeticionesRealizadas.trim()
+            ? Number(exercise.repeticionesRealizadas)
+            : assignedRepetitions,
+        };
+      },
+    );
+    const hasInvalidResults = completedExercises.some((exercise) =>
+      !Number.isInteger(exercise.seriesAsignadas) ||
+      exercise.seriesAsignadas < 1 ||
+      exercise.seriesAsignadas > 99 ||
+      !Number.isInteger(exercise.repeticionesAsignadas) ||
+      exercise.repeticionesAsignadas < 1 ||
+      exercise.repeticionesAsignadas > 999 ||
+      !Number.isInteger(exercise.seriesRealizadas) ||
+      exercise.seriesRealizadas < 1 ||
+      exercise.seriesRealizadas > 99 ||
+      !Number.isInteger(exercise.repeticionesRealizadas) ||
+      exercise.repeticionesRealizadas < 1 ||
+      exercise.repeticionesRealizadas > 999,
+    );
 
     if (hasInvalidResults) {
       setValidationMessage(
-        "Revisa los objetivos y registra series y repeticiones realizadas para cada ejercicio.",
+        "Revisa los objetivos y resultados: las series deben ser de 1 a 99 y las repeticiones de 1 a 999.",
       );
       return;
     }
@@ -1132,17 +1144,6 @@ function WorkoutSessionScreen({
       1,
       Math.floor((Date.now() - startedAt.getTime()) / 1000),
     );
-    const completedExercises: CompletedWorkoutExercise[] = sessionExercises.map(
-      (exercise) => ({
-        ejercicioId: exercise.ejercicioId,
-        ejercicioNombre: exercise.ejercicioNombre,
-        seriesAsignadas: exercise.seriesAsignadas || 3,
-        repeticionesAsignadas: exercise.repeticionesAsignadas || 12,
-        seriesRealizadas: Number(exercise.seriesRealizadas),
-        repeticionesRealizadas: Number(exercise.repeticionesRealizadas),
-      }),
-    );
-
     try {
       await saveCompletedWorkout({
         clientId: user.clientId,
@@ -1160,10 +1161,20 @@ function WorkoutSessionScreen({
         "Entrenamiento finalizado",
         `Sesión del ${day.toLowerCase()} completada en ${formatDuration(durationSeconds)}.`,
       );
-    } catch {
+    } catch (error) {
+      const errorCode =
+        typeof error === "object" && error !== null && "code" in error
+          ? String(error.code)
+          : null;
+      console.error("Error al guardar el entrenamiento finalizado:", error);
       Alert.alert(
         "No se pudo finalizar",
-        "No pudimos guardar la sesión. Inténtalo otra vez.",
+        errorCode === "permission-denied" ||
+          errorCode === "firestore/permission-denied"
+          ? "Firestore rechazó el registro. Publica las reglas actualizadas de firestore.rules en el proyecto sportgym-2b2f8 y vuelve a intentarlo."
+          : errorCode
+            ? `No se pudo guardar la sesión (${errorCode}). Revisa tu conexión e inténtalo de nuevo.`
+            : "No se pudo guardar la sesión. Revisa tu conexión e inténtalo de nuevo.",
       );
     } finally {
       setIsSaving(false);
@@ -1210,6 +1221,11 @@ function WorkoutSessionScreen({
                 </ThemedText>
               </View>
             </View>
+            {startedAt && !isCompleted ? (
+              <ThemedText style={styles.sessionSummaryText}>
+                Los resultados que dejes vacíos usarán el objetivo asignado.
+              </ThemedText>
+            ) : null}
 
             {!startedAt ? (
               <Pressable

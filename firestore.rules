@@ -254,6 +254,39 @@ service cloud.firestore {
       allow read, delete: if ownsClient(resource.data.clienteId);
     }
 
+    match /entrenamientos/{workoutId} {
+      allow create: if request.resource.data.keys().hasAll([
+          "clienteId",
+          "clienteUsuario",
+          "clienteNombre",
+          "dia",
+          "estado",
+          "fechaInicio",
+          "fechaFinalizacion",
+          "duracionSegundos",
+          "duracionMinutos",
+          "totalEjercicios",
+          "ejercicios"
+        ])
+        && request.resource.data.clienteId is string
+        && ownsClient(request.resource.data.clienteId)
+        && request.resource.data.clienteUsuario is string
+        && request.resource.data.clienteNombre is string
+        && request.resource.data.dia is string
+        && request.resource.data.estado == "completado"
+        && request.resource.data.fechaInicio is timestamp
+        && request.resource.data.fechaFinalizacion is timestamp
+        && request.resource.data.duracionSegundos is int
+        && request.resource.data.duracionSegundos > 0
+        && request.resource.data.duracionMinutos is int
+        && request.resource.data.duracionMinutos > 0
+        && request.resource.data.totalEjercicios is int
+        && request.resource.data.totalEjercicios > 0
+        && request.resource.data.ejercicios is list
+        && request.resource.data.ejercicios.size()
+          == request.resource.data.totalEjercicios;
+    }
+
     match /conversaciones_chatbot/{conversationId} {
       allow create: if request.resource.data.clienteId is string
         && ownsClient(request.resource.data.clienteId);

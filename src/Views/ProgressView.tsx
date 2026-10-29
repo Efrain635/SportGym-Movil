@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -183,25 +183,41 @@ export default function ProgressView() {
       },
     );
 
-    getClientWorkoutProgress(clientId)
-      .then((result) => {
-        if (!active) return;
-        setWorkouts(result);
-        setWorkoutErrorId(null);
-      })
-      .catch((error) => {
-        console.error('Error al consultar entrenamientos del cliente:', error);
-        if (active) setWorkoutErrorId(clientId);
-      })
-      .finally(() => {
-        if (active) setLoadedWorkoutId(clientId);
-      });
-
     return () => {
       active = false;
       unsubscribeProgress();
     };
   }, [clientId, user?.goal]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!clientId) {
+        setWorkouts(blankWorkouts);
+        setLoadedWorkoutId(null);
+        setWorkoutErrorId(null);
+        return;
+      }
+
+      let active = true;
+      getClientWorkoutProgress(clientId)
+        .then((result) => {
+          if (!active) return;
+          setWorkouts(result);
+          setWorkoutErrorId(null);
+        })
+        .catch((error) => {
+          console.error('Error al consultar entrenamientos del cliente:', error);
+          if (active) setWorkoutErrorId(clientId);
+        })
+        .finally(() => {
+          if (active) setLoadedWorkoutId(clientId);
+        });
+
+      return () => {
+        active = false;
+      };
+    }, [clientId]),
+  );
 
   useEffect(() => {
     let active = true;
