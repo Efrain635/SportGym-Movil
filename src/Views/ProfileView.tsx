@@ -1,8 +1,8 @@
 import { ThemedText } from '@/components/themed-text';
 import { SportGymColors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, signOut } from '../../FirebaseConfig';
@@ -183,35 +183,31 @@ export default function ProfileView() {
     ? user.weight / ((user.height / 100) ** 2)
     : null;
 
-  useEffect(() => {
-    let isActive = true;
-    const clientId = user?.clientId;
-    if (!clientId) {
-      setWorkoutProgress({ totalExercises: 0, totalWorkouts: 0 });
-      setIsLoadingProgress(false);
+  useFocusEffect(
+    useCallback(() => {
+      const clientId = user?.clientId;
+      if (!clientId) return;
+
+      let isActive = true;
+      getClientWorkoutProgress(clientId)
+        .then((progress) => {
+          if (!isActive) return;
+          setWorkoutProgress(progress);
+          setProgressError(false);
+        })
+        .catch((error) => {
+          console.error('Error al cargar progreso de ejercicios:', error);
+          if (isActive) setProgressError(true);
+        })
+        .finally(() => {
+          if (isActive) setIsLoadingProgress(false);
+        });
+
       return () => {
         isActive = false;
       };
-    }
-
-    setIsLoadingProgress(true);
-    setProgressError(false);
-    getClientWorkoutProgress(clientId)
-      .then((progress) => {
-        if (isActive) setWorkoutProgress(progress);
-      })
-      .catch((error) => {
-        console.error('Error al cargar progreso de ejercicios:', error);
-        if (isActive) setProgressError(true);
-      })
-      .finally(() => {
-        if (isActive) setIsLoadingProgress(false);
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [user?.clientId]);
+    }, [user?.clientId]),
+  );
 
   const updateDraft = <K extends keyof ProfileDraft>(
     field: K,
@@ -561,6 +557,16 @@ export default function ProfileView() {
                     </ThemedText>
                   )}
                   <ThemedText style={styles.achievementHeading}>Logros</ThemedText>
+                  {!isLoadingProgress && !progressError && (
+                    <ThemedText style={styles.progressText}>
+                      {exerciseAchievements.filter(
+                        (achievement) =>
+                          workoutProgress.totalExercises >= achievement.threshold,
+                      ).length}{' '}
+                      de {exerciseAchievements.length} logros desbloqueados ·{' '}
+                      {workoutProgress.totalExercises} ejercicios de rutinas finalizadas
+                    </ThemedText>
+                  )}
                   {!isLoadingProgress && !progressError && (
                     <View style={styles.achievementList}>
                       {exerciseAchievements.map((achievement) => {
