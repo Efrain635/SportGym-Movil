@@ -33,7 +33,7 @@ import {
     type ChatConversation,
     type ClientProgressHistory
 } from "../../assets/database/firebase";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import {
     createChatbotRoutine,
     formatChatbotRoutine,

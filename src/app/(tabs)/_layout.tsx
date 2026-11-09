@@ -1,10 +1,33 @@
 import { SportGymColors } from "@/constants/theme";
-import { Tabs } from "expo-router";
-import { Text, type ColorValue } from "react-native";
+import { Redirect, Tabs } from "expo-router";
+import { ActivityIndicator, Text, View, type ColorValue } from "react-native";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function TabLayout() {
+  const { user, isRestoringSession } = useAuth();
+
+  if (isRestoringSession) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#090A0A",
+        }}
+      >
+        <ActivityIndicator color={SportGymColors.primary} />
+      </View>
+    );
+  }
+
+  if (!user?.clientId) {
+    return <Redirect href="/login" />;
+  }
+
   return (
       <Tabs
+        id="client-tabs"
         screenOptions={{
           tabBarActiveTintColor: SportGymColors.primary,
           tabBarInactiveTintColor: "#888888",

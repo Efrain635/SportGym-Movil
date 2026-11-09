@@ -25,7 +25,7 @@ import {
 import exerciseData from "../../assets/exercises/exercises.json";
 import { AnimatedBottomNav } from "../components/AnimatedBottomTab";
 import { SportGymColors } from "../constants/theme";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Exercise = {
   id: string;

@@ -2,9 +2,23 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(
+          /databases/$(database)/documents/usuarios/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/usuarios/$(request.auth.uid)
+        ).data.rol == "admin";
+    }
+
     function ownsClient(clientId) {
       let clientPath = /databases/$(database)/documents/clientes/$(clientId);
-      return request.auth != null
+      return signedIn()
         && (
           request.auth.uid == clientId
           || request.auth.token.get("clienteId", "") == clientId
@@ -24,6 +38,16 @@ service cloud.firestore {
         );
     }
 
+    function ownsClientDocumentId(documentId) {
+      return signedIn()
+        && (
+          documentId.matches("^" + request.auth.uid + "_.*$")
+          || documentId.matches(
+            "^" + request.auth.token.get("clienteId", "") + "_.*$"
+          )
+        );
+    }
+
     match /productos/{document=**} {
       allow read: if true;
     }
@@ -32,7 +56,47 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    match /usernames/{username} {
+      allow get: if true;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email;
+      allow update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow get: if signedIn()
+        && (request.auth.uid == userId || isAdmin());
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.username is string
+        && request.resource.data.firstName is string
+        && request.resource.data.lastName is string
+        && request.resource.data.phone is string
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if isAdmin();
+    }
+
+    match /usuarios/{userId} {
+      allow read: if signedIn()
+        && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
     match /clientes/{clientId} {
+      function validClientCreation() {
+        return signedIn()
+          && request.auth.uid == clientId
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.correo == request.auth.token.email
+          && request.resource.data.usuario is string
+          && request.resource.data.nombre is string
+          && request.resource.data.apellido is string
+          && request.resource.data.telefono is string
+          && request.resource.data.asistencias is list;
+      }
+
       function attendanceOnlyUpdate() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "asistencias",
@@ -47,6 +111,94 @@ service cloud.firestore {
         && request.resource.data.mejorRachaAsistencia >= 0
         && request.resource.data.totalAsistencias is int
         && request.resource.data.totalAsistencias >= 0;
+      }
+
+      function validClientProfileUpdate() {
+        let changedFields = request.resource.data.diff(resource.data).affectedKeys();
+        return changedFields.hasAll(["nombre", "apellido", "fechaUltimoCambio"])
+          && changedFields.hasOnly([
+            "nombre",
+            "apellido",
+            "telefono",
+            "fechaNacimiento",
+            "genero",
+            "peso",
+            "estatura",
+            "nivel",
+            "fechaUltimoCambio"
+          ])
+          && request.resource.data.nombre is string
+          && request.resource.data.apellido is string
+          && (
+            !changedFields.hasAny(["telefono"])
+            || request.resource.data.telefono == null
+            || request.resource.data.telefono is string
+          )
+          && (
+            !changedFields.hasAny(["fechaNacimiento"])
+            || request.resource.data.fechaNacimiento == null
+            || request.resource.data.fechaNacimiento is string
+          )
+          && (
+            !changedFields.hasAny(["genero"])
+            || request.resource.data.genero == null
+            || request.resource.data.genero is string
+          )
+          && (
+            !changedFields.hasAny(["peso"])
+            || request.resource.data.peso == null
+            || (
+              request.resource.data.peso is number
+              && request.resource.data.peso >= 20
+              && request.resource.data.peso <= 400
+            )
+          )
+          && (
+            !changedFields.hasAny(["estatura"])
+            || request.resource.data.estatura == null
+            || (
+              request.resource.data.estatura is number
+              && request.resource.data.estatura >= 100
+              && request.resource.data.estatura <= 250
+            )
+          )
+          && (
+            !changedFields.hasAny(["nivel"])
+            || request.resource.data.nivel
+              in ["principiante", "intermedio", "avanzado"]
+          )
+          && request.resource.data.fechaUltimoCambio is timestamp;
+      }
+
+      function validClientPreferencesUpdate() {
+        let changedFields = request.resource.data.diff(resource.data).affectedKeys();
+        return changedFields.hasAny([
+            "objetivo",
+            "nivel",
+            "diasEntrenamiento",
+            "maquinasDisponibles",
+            "maquinas",
+            "restricciones"
+          ])
+          && changedFields.hasOnly([
+            "objetivo",
+            "nivel",
+            "diasEntrenamiento",
+            "maquinasDisponibles",
+            "maquinas",
+            "restricciones",
+            "fechaUltimoCambio"
+          ])
+          && request.resource.data.objetivo is string
+          && request.resource.data.nivel
+            in ["principiante", "intermedio", "avanzado"]
+          && request.resource.data.diasEntrenamiento is int
+          && request.resource.data.diasEntrenamiento >= 1
+          && request.resource.data.diasEntrenamiento <= 7
+          && request.resource.data.maquinasDisponibles is list
+          && request.resource.data.maquinas is list
+          && request.resource.data.restricciones is list
+          && request.resource.data.fechaUltimoCambio is timestamp;
       }
 
       function validWeightProgressUpdate() {
@@ -178,9 +330,24 @@ service cloud.firestore {
           && progress.fechaActualizacion is timestamp;
       }
 
+      allow get: if ownsClient(clientId);
+      allow list: if signedIn()
+        && (
+          isAdmin()
+          || (
+            request.auth.token.email is string
+            && (
+              resource.data.get("correo", "") == request.auth.token.email
+              || resource.data.get("email", "") == request.auth.token.email
+            )
+          )
+        );
+      allow create: if validClientCreation();
       allow update: if ownsClient(clientId)
         && (
           attendanceOnlyUpdate()
+          || validClientProfileUpdate()
+          || validClientPreferencesUpdate()
           || validWeightProgressUpdate()
           || validProgressGoalUpdate()
           || validMeasurementProgressUpdate()
@@ -188,6 +355,9 @@ service cloud.firestore {
     }
 
     match /asistencias/{attendanceId} {
+      allow get: if ownsClientDocumentId(attendanceId)
+        || ownsClient(resource.data.cliente);
+      allow list: if ownsClient(resource.data.cliente);
       allow create: if request.resource.data.keys().hasAll([
           "nombreUsuario",
           "usuario",
@@ -213,6 +383,9 @@ service cloud.firestore {
     }
 
     match /favoritos_recetas/{favoriteId} {
+      allow get: if ownsClientDocumentId(favoriteId)
+        || ownsClient(resource.data.clienteId);
+      allow list: if ownsClient(resource.data.clienteId);
       allow create, update: if request.resource.data.clienteId is string
         && request.resource.data.recetaId is string
         && favoriteId
@@ -225,6 +398,9 @@ service cloud.firestore {
     }
 
     match /favoritos/{favoriteId} {
+      allow get: if ownsClientDocumentId(favoriteId)
+        || ownsClient(resource.data.clienteId);
+      allow list: if ownsClient(resource.data.clienteId);
       allow create, update: if request.resource.data.clienteId is string
         && request.resource.data.ejercicioId is string
         && favoriteId
@@ -233,7 +409,7 @@ service cloud.firestore {
             + request.resource.data.ejercicioId
         && ownsClient(request.resource.data.clienteId);
 
-      allow read, delete: if ownsClient(resource.data.clienteId);
+      allow delete: if ownsClient(resource.data.clienteId);
     }
 
     match /rutinas/{routineId} {
@@ -255,6 +431,7 @@ service cloud.firestore {
     }
 
     match /entrenamientos/{workoutId} {
+      allow read: if ownsClient(resource.data.clienteId);
       allow create: if request.resource.data.keys().hasAll([
           "clienteId",
           "clienteUsuario",
@@ -313,15 +490,7 @@ service cloud.firestore {
     }
 
     match /{document=**} {
-      allow read: if request.auth != null;
-
-      allow write: if request.auth != null
-        && exists(
-          /databases/$(database)/documents/usuarios/$(request.auth.uid)
-        )
-        && get(
-          /databases/$(database)/documents/usuarios/$(request.auth.uid)
-        ).data.rol == 'admin';
+      allow read, write: if isAdmin();
     }
   }
 }

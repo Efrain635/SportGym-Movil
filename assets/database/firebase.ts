@@ -35,7 +35,6 @@ import {
     where,
     writeBatch,
     type DocumentData,
-    type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -203,37 +202,57 @@ export async function getAuthenticatedClientProfile(
   authEmail: string | null,
   clientIdClaim?: string,
 ): Promise<(DocumentData & { documentId: string }) | null> {
-  const userReference = doc(db, "users", uid);
   const clientId = clientIdClaim || uid;
-  const clientReference = doc(db, "clientes", clientId);
-  const [userSnapshot, clientSnapshot] = await Promise.all([
-    getDoc(userReference),
-    getDoc(clientReference),
-  ]);
+  const readWhenPermitted = async <T,>(
+    read: () => Promise<T>,
+  ): Promise<T | null> => {
+    try {
+      return await read();
+    } catch (error) {
+      const errorCode = (error as { code?: string }).code;
+      if (
+        errorCode !== "permission-denied" &&
+        errorCode !== "firestore/permission-denied"
+      ) {
+        throw error;
+      }
 
+      console.warn("Firestore denegó una lectura del perfil del usuario.");
+      return null;
+    }
+  };
+
+  const [userSnapshot, clientSnapshot] = await Promise.all([
+    readWhenPermitted(() => getDoc(doc(db, "users", uid))),
+    readWhenPermitted(() => getDoc(doc(db, "clientes", clientId))),
+  ]);
   let clientDocumentId = clientId;
   let matchedClientSnapshot = clientSnapshot;
 
-  if (!clientSnapshot.exists() && authEmail?.trim()) {
+  if (!clientSnapshot?.exists() && authEmail?.trim()) {
     const normalizedEmail = authEmail.trim().toLowerCase();
-    const [emailFieldSnapshot, correoFieldSnapshot] = await Promise.all([
-      getDocs(
-        query(
-          collection(db, "clientes"),
-          where("email", "==", normalizedEmail),
-          limit(1),
+    const [emailSnapshot, correoSnapshot] = await Promise.all([
+      readWhenPermitted(() =>
+        getDocs(
+          query(
+            collection(db, "clientes"),
+            where("email", "==", normalizedEmail),
+            limit(1),
+          ),
         ),
       ),
-      getDocs(
-        query(
-          collection(db, "clientes"),
-          where("correo", "==", normalizedEmail),
-          limit(1),
+      readWhenPermitted(() =>
+        getDocs(
+          query(
+            collection(db, "clientes"),
+            where("correo", "==", normalizedEmail),
+            limit(1),
+          ),
         ),
       ),
     ]);
     const matchingDocument =
-      emailFieldSnapshot.docs[0] ?? correoFieldSnapshot.docs[0];
+      emailSnapshot?.docs[0] ?? correoSnapshot?.docs[0];
 
     if (matchingDocument) {
       clientDocumentId = matchingDocument.id;
@@ -241,16 +260,21 @@ export async function getAuthenticatedClientProfile(
     }
   }
 
-  if (!userSnapshot.exists() && !matchedClientSnapshot.exists()) {
-    return null;
+  if (!userSnapshot?.exists() && !matchedClientSnapshot?.exists()) {
+    return {
+      uid,
+      documentId: clientId,
+      username: authEmail ?? "",
+      email: authEmail,
+    };
   }
 
-  const userData = userSnapshot.exists() ? userSnapshot.data() : {};
-  let clientData = matchedClientSnapshot.exists()
+  const userData = userSnapshot?.exists() ? userSnapshot.data() : {};
+  let clientData = matchedClientSnapshot?.exists()
     ? matchedClientSnapshot.data()
     : {};
 
-  if (userSnapshot.exists() && !matchedClientSnapshot.exists()) {
+  if (userSnapshot?.exists() && !matchedClientSnapshot?.exists()) {
     const username =
       typeof userData.username === "string" ? userData.username : "";
     const email =
@@ -270,7 +294,6 @@ export async function getAuthenticatedClientProfile(
       telefono: phone,
       asistencias: [],
     };
-    await setDoc(clientReference, clientData);
   }
 
   return {
@@ -1170,58 +1193,23 @@ export async function updateClientProfile(
     throw new Error("missing-username");
   }
 
-  const identifierCandidates = Array.from(
-    new Set([
-      normalizedUsername,
-      normalizedUsername.replace(/@.*$/, ""),
-      normalizedUsername.replace(/\.[^/.]+$/, ""),
-    ]),
-  ).filter(Boolean);
-
-  let clientDoc: QueryDocumentSnapshot<DocumentData> | null = null;
-
-  for (const candidate of identifierCandidates) {
-    const queryOptions = [
-      query(
-        collection(db, "clientes"),
-        where("usuario", "==", candidate),
-        limit(1),
-      ),
-      query(
-        collection(db, "clientes"),
-        where("username", "==", candidate),
-        limit(1),
-      ),
-      query(
-        collection(db, "clientes"),
-        where("email", "==", candidate),
-        limit(1),
-      ),
-      query(
-        collection(db, "clientes"),
-        where("correo", "==", candidate),
-        limit(1),
-      ),
-    ];
-
-    for (const queryDefinition of queryOptions) {
-      const snapshot = await getDocs(queryDefinition);
-      if (!snapshot.empty) {
-        clientDoc = snapshot.docs[0];
-        break;
-      }
-    }
-
-    if (clientDoc) {
-      break;
-    }
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error("unauthenticated");
   }
 
-  if (!clientDoc) {
+  const token = await currentUser.getIdTokenResult();
+  const clientIdClaim = token.claims.clienteId;
+  const clientId =
+    typeof clientIdClaim === "string" ? clientIdClaim : currentUser.uid;
+  const clientReference = doc(db, "clientes", clientId);
+  const clientSnapshot = await getDoc(clientReference);
+
+  if (!clientSnapshot.exists()) {
     throw new Error("client-not-found");
   }
 
-  const clientData = clientDoc.data();
+  const clientData = clientSnapshot.data();
   const nextMachines =
     profile.gymMachines ??
     (Array.isArray(clientData.maquinasDisponibles)
@@ -1231,7 +1219,7 @@ export async function updateClientProfile(
     profile.restrictions ??
     (Array.isArray(clientData.restricciones) ? clientData.restricciones : []);
 
-  await updateDoc(clientDoc.ref, {
+  await updateDoc(clientReference, {
     objetivo:
       profile.goal ??
       (typeof clientData.objetivo === "string"

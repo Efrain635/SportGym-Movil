@@ -10,7 +10,7 @@ import {
   getClientWorkoutProgress,
   updateClientPersonalData,
 } from '../../assets/database/firebase';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useAttendance } from '../lib/attendance';
 
 type TabName = 'Inicio' | 'Rutina' | 'Tienda' | 'Nutrición';

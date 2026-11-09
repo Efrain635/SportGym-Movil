@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedBottomNav } from '../components/AnimatedBottomTab';
 import { ThemedText } from '../components/themed-text';
 import { SportGymColors } from '../constants/theme';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { registerAttendance, useAttendance } from '../lib/attendance';
 
 const parseMembershipDate = (value: string | null) => {

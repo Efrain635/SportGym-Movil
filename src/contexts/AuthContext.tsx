@@ -52,11 +52,6 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const parentContext = useContext(AuthContext);
-  if (parentContext) {
-    return children;
-  }
-
   return <AuthStateProvider>{children}</AuthStateProvider>;
 }
 
@@ -77,11 +72,23 @@ function AuthStateProvider({ children }: { children: ReactNode }) {
       }
 
       setIsRestoringSession(true);
-      setUser(null);
+      setUser({
+        clientId: firebaseUser.uid,
+        firstName: "",
+        lastName: "",
+        username: firebaseUser.email || "",
+        email: firebaseUser.email || "",
+        phone: null,
+        membership: null,
+      });
+      let clientId = firebaseUser.uid;
       void firebaseUser
         .getIdTokenResult()
         .then((token) => {
           const clientIdClaim = token.claims.clienteId;
+          if (typeof clientIdClaim === "string") {
+            clientId = clientIdClaim;
+          }
           return getAuthenticatedClientProfile(
             firebaseUser.uid,
             firebaseUser.email,
@@ -128,7 +135,15 @@ function AuthStateProvider({ children }: { children: ReactNode }) {
         .catch((error: unknown) => {
           console.error("Error al restaurar la sesión del usuario:", error);
           if (isActive && authChangeVersion.current === version) {
-            setUser(null);
+            setUser({
+              clientId,
+              firstName: "",
+              lastName: "",
+              username: firebaseUser.email || "",
+              email: firebaseUser.email || "",
+              phone: null,
+              membership: null,
+            });
           }
         })
         .finally(() => {

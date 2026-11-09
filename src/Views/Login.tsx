@@ -17,7 +17,7 @@ import {
     getClientMembership,
     verifyClientCredentials,
 } from "../../assets/database/firebase";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function LoginScreen() {
   const [username, setUsername] = useState("");

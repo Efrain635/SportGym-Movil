@@ -29,7 +29,7 @@ import {
   calculateHealthyWeightRange,
   getCompleteBMIAnalysis,
 } from '../lib/bmi-calculator';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useAttendance } from '../lib/attendance';
 
 type ProgressTab = 'Resumen' | 'Gráficas' | 'Logros';

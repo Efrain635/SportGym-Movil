@@ -7,7 +7,7 @@ import {
     StyleSheet,
     View
 } from "react-native";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const { width, height } = Dimensions.get("window");
 

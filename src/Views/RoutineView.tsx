@@ -28,7 +28,7 @@ import exerciseData from "../../assets/exercises/exercises.json";
 import { AnimatedBottomNav } from "../components/AnimatedBottomTab";
 import { ThemedText } from "../components/themed-text";
 import { SportGymColors } from "../constants/theme";
-import { useAuth, type User } from "../contexts/AuthContext";
+import { useAuth, type User } from "@/contexts/AuthContext";
 
 type Exercise = {
   id: string;
