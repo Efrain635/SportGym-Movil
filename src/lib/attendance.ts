@@ -6,7 +6,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 
-import { db } from '../../assets/database/firebase';
+import { auth, db } from '../../assets/database/firebase';
 
 const toDateKey = (date: Date) => {
   const year = date.getFullYear();
@@ -71,36 +71,38 @@ const getAttendanceSummary = (
   return { currentStreak, weekTotal, bestStreak };
 };
 
-export async function registerAttendance(
-  clientId: string,
-  username: string,
-  date = new Date(),
-) {
-  if (!clientId.trim()) {
+export async function registerAttendance(clientId: string) {
+  const normalizedClientId = clientId.trim();
+  if (!normalizedClientId) {
     throw new Error('missing-client-id');
   }
-  if (!username.trim()) {
-    throw new Error('missing-username');
+  const authenticatedUser = auth.currentUser;
+  if (!authenticatedUser) {
+    throw new Error('unauthenticated');
   }
 
+  const date = new Date();
   const dateKey = toDateKey(date);
-  const clientRef = doc(db, 'clientes', clientId);
-  const attendanceRef = doc(db, 'asistencias', `${clientId}_${dateKey}`);
+  const clientRef = doc(db, 'clientes', normalizedClientId);
+  const attendanceRef = doc(
+    db,
+    'asistencias',
+    `${authenticatedUser.uid}_${dateKey}`,
+  );
 
   return runTransaction(db, async (transaction) => {
     const clientSnapshot = await transaction.get(clientRef);
     if (!clientSnapshot.exists()) {
       throw new Error('client-not-found');
     }
-    const attendanceSnapshot = await transaction.get(attendanceRef);
 
+    const attendanceSnapshot = await transaction.get(attendanceRef);
     const clientData = clientSnapshot.data();
     const attendanceDates = new Set(
       Array.isArray(clientData.asistencias)
         ? clientData.asistencias.filter(isDateKey)
         : [],
     );
-
     const wasAlreadyRegistered =
       attendanceDates.has(dateKey) || attendanceSnapshot.exists();
 
@@ -110,18 +112,20 @@ export async function registerAttendance(
       date,
     );
 
-    if (!attendanceSnapshot.exists()) {
+    if (!wasAlreadyRegistered) {
+      const username =
+        typeof clientData.usuario === 'string' ? clientData.usuario : '';
       const firstName =
         typeof clientData.nombre === 'string' ? clientData.nombre : '';
       const lastName =
         typeof clientData.apellido === 'string' ? clientData.apellido : '';
 
       transaction.set(attendanceRef, {
-        nombreUsuario: username.trim(),
-        usuario: username.trim(),
+        nombreUsuario: username,
+        usuario: username,
         hora: serverTimestamp(),
         fecha: dateKey,
-        cliente: clientId,
+        cliente: normalizedClientId,
         nombreCliente: [firstName, lastName].filter(Boolean).join(' '),
         estado: 'presente',
       });

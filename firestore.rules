@@ -25,7 +25,8 @@ service cloud.firestore {
           || (
             exists(clientPath)
             && (
-              (
+              get(clientPath).data.get("uid", "") == request.auth.uid
+              || (
                 get(clientPath).data.keys().hasAny(["correo"])
                 && get(clientPath).data.correo == request.auth.token.email
               )
@@ -355,8 +356,7 @@ service cloud.firestore {
     }
 
     match /asistencias/{attendanceId} {
-      allow get: if ownsClientDocumentId(attendanceId)
-        || ownsClient(resource.data.cliente);
+      allow get: if ownsClientDocumentId(attendanceId);
       allow list: if ownsClient(resource.data.cliente);
       allow create: if request.resource.data.keys().hasAll([
           "nombreUsuario",
@@ -373,8 +373,13 @@ service cloud.firestore {
         && request.resource.data.fecha.matches(
           "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
         )
-        && attendanceId
-          == request.resource.data.cliente + "_" + request.resource.data.fecha
+        && (
+          attendanceId
+            == request.auth.uid + "_" + request.resource.data.fecha
+          || attendanceId
+            == request.auth.token.get("clienteId", "")
+              + "_" + request.resource.data.fecha
+        )
         && request.resource.data.nombreUsuario is string
         && request.resource.data.usuario is string
         && request.resource.data.hora is timestamp

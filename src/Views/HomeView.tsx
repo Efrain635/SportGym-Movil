@@ -132,10 +132,7 @@ export default function HomeView() {
     setIsSavingAttendance(true);
 
     try {
-      const wasRegistered = await registerAttendance(
-        user.clientId,
-        user.username,
-      );
+      const wasRegistered = await registerAttendance(user.clientId);
       setIsScannerVisible(false);
       Alert.alert(
         wasRegistered ? 'Asistencia registrada' : 'Asistencia ya registrada',
@@ -145,16 +142,20 @@ export default function HomeView() {
       );
     } catch (error) {
       console.error('Error al registrar la asistencia del cliente:', error);
-      scanInProgress.current = false;
       const errorCode = (error as { code?: string }).code;
+      const errorMessage = (error as { message?: string }).message;
       const message =
-        errorCode === 'permission-denied'
-          ? 'Firebase no permite guardar tu asistencia. Revisa las reglas de la colección clientes.'
-          : errorCode === 'client-not-found'
-            ? 'No se encontró tu registro de cliente. Cierra sesión e inicia nuevamente.'
-            : 'No fue posible guardar tu asistencia. Verifica tu conexión e inténtalo de nuevo.';
+        errorCode === 'permission-denied' ||
+        errorCode === 'firestore/permission-denied'
+          ? 'Firestore no permitió registrar la asistencia. Verifica que la sesión corresponda al perfil del cliente.'
+          : errorMessage === 'unauthenticated'
+            ? 'Tu sesión expiró. Inicia sesión nuevamente para registrar tu asistencia.'
+            : errorMessage === 'client-not-found'
+              ? 'No se encontró tu registro de cliente. Cierra sesión e inicia nuevamente.'
+              : 'No fue posible guardar tu asistencia. Verifica tu conexión e inténtalo de nuevo.';
       Alert.alert('No se pudo registrar', message);
     } finally {
+      scanInProgress.current = false;
       setIsSavingAttendance(false);
     }
   };
